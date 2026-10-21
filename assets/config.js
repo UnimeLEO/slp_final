@@ -1,3 +1,2 @@
 // Public configuration only. Never put passwords or API keys here.
-// Until the actual Worker URL is supplied, use the researcher-generated entry link.
-window.SLP_CONFIG = Object.freeze({ API_BASE: '', VERSION: '0.1.0' });
+window.SLP_CONFIG = Object.freeze({ API_BASE: 'https://slp-final-admin.njsukleo.workers.dev', VERSION: '0.2.0' });

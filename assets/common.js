@@ -10,7 +10,7 @@ window.SLP = (() => {
   }
   async function api(base, body, secret = '') {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
+    const timer = setTimeout(() => controller.abort(), 40000);
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (secret) headers.Authorization = 'Bearer ' + secret;

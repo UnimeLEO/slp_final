@@ -3,13 +3,13 @@
   const { $, api, status } = SLP;
   const storageKey = 'slp_final_worker_url_v1';
   let base = '', secret = '', selected = null, pending = null, sending = false;
-  let timer = null, busy = false, epoch = 0, lastList = 0;
+  let timer = null, busy = false, epoch = 0, lastList = 0, aiLoaded = false, selectVersion = 0;
   const view = SLP.chatView($('human-messages'), 'interlocutor');
   try { $('worker-url').value = localStorage.getItem(storageKey) || window.SLP_CONFIG.API_BASE; } catch (_) { /* optional local setting */ }
   const call = body => api(base, body, secret);
   const errorAt = (id, error) => status(id, error.message || String(error), true);
   function lock() {
-    epoch++; clearTimeout(timer); secret = ''; selected = null; pending = null; sending = false;
+    epoch++; selectVersion++; aiLoaded = false; clearTimeout(timer); secret = ''; selected = null; pending = null; sending = false;
     view.reset(); $('human-draft').value = ''; $('human-draft').readOnly = false;
     $('created-credentials').textContent = ''; $('credentials-receipt').hidden = true;
     $('session-rows').replaceChildren(); $('human-role').textContent = ''; $('human-participant-prompt').textContent = '';
@@ -30,6 +30,8 @@
     const stamp = epoch;
     const data = await call({ action: 'admin_state' });
     if (stamp !== epoch || !secret) return;
+    updateAiStatus(data);
+    if (!aiLoaded) { fillAiForm(data.ai_config); aiLoaded = true; }
     const fragment = document.createDocumentFragment();
     if (!data.sessions.length) {
       const tr = document.createElement('tr'), td = document.createElement('td');
@@ -37,7 +39,7 @@
     }
     for (const session of data.sessions) {
       const tr = document.createElement('tr');
-      for (const value of [session.id, session.condition === 'human' ? 'Human' : 'AI（待接入）', session.scenario_code, { ready: '待开始', active: '进行中', ended: '已结束' }[session.status]]) {
+      for (const value of [session.id, session.condition === 'human' ? 'Human' : 'AI', session.scenario_code, { ready: '待开始', active: '进行中', ended: '已结束' }[session.status]]) {
         const td = document.createElement('td'); td.textContent = value; tr.append(td);
       }
       const td = document.createElement('td'), button = document.createElement('button');
@@ -51,7 +53,7 @@
     const id = selected.id, stamp = epoch;
     const data = await call({ action: 'admin_session', session_id: id, after_id: view.cursor });
     if (stamp !== epoch || selected?.id !== id || !secret) return;
-    view.append(data.messages); sessionState(data.session);
+    view.append(data.messages); sessionState(data.session); showAiJobs(data);
   }
   async function poll() {
     if (busy || !secret) return;
@@ -73,14 +75,14 @@
     if (selected?.id === id) return;
     if (sending || (pending && !confirm('当前回复尚未确认发送。切换后请核对聊天记录，避免重复发送。继续切换？'))) return;
     if ($('human-draft').value.trim() && !pending && !confirm('当前输入框有未发送内容。切换会话并清除草稿？')) return;
-    const stamp = epoch;
+    const stamp = epoch, selection = ++selectVersion;
     try {
       const data = await call({ action: 'admin_session', session_id: id, after_id: 0 });
-      if (stamp !== epoch || !secret) return;
+      if (stamp !== epoch || selection !== selectVersion || !secret) return;
       pending = null; $('human-draft').value = ''; $('human-draft').readOnly = false;
       $('human-send').textContent = '发送回复';
-      view.reset(); view.append(data.messages); sessionState(data.session);
-      $('human-title').textContent = data.session.id + ' · ' + (data.session.condition === 'human' ? 'Human 对话' : 'AI 任务（待接入）');
+      view.reset(); view.append(data.messages); sessionState(data.session); showAiJobs(data);
+      $('human-title').textContent = data.session.id + ' · ' + (data.session.condition === 'human' ? 'Human 对话' : 'AI 任务监控');
       $('human-role').textContent = data.session.interlocutor_prompt;
       $('human-participant-prompt').textContent = data.session.participant_prompt;
       $('human-panel').hidden = false; status('human-status', '会话已载入。');
@@ -185,6 +187,45 @@
       status('human-status', '已触发 ' + format.toUpperCase() + ' 下载。');
     } catch (error) { if (stamp === epoch) errorAt('human-status', error); }
     finally { button.disabled = false; }
+  });
+  function fillAiForm(config) {
+    if (!config) return;
+    for (const [id, key] of [['ai-model','model'],['ai-delay-k','ms_per_character'],['ai-delay-min','random_min_ms'],['ai-delay-max','random_max_ms'],['ai-output-budget','max_output_tokens'],['ai-reasoning','reasoning_effort'],['ai-base-prompt','base_prompt']]) $(id).value = config[key];
+  }
+  function updateAiStatus(data) {
+    $('ai-config-state').textContent = data.ai_enabled ? '已配置 · 需实际测试' : (data.api_key_configured ? '请配置模型' : '未设置 OPENAI_API_KEY');
+    $('ai-config-state').className = 'badge' + (data.ai_enabled ? ' connected' : '');
+  }
+  function showAiJobs(data) {
+    $('ai-monitor').hidden = data.session.condition !== 'ai';
+    const labels = { queued:'排队', generating:'生成中', ready:'等待目标时间', delivered:'已送入聊天', error:'失败', cancelled:'已取消', superseded:'已合并' };
+    $('ai-job-status').textContent = (data.ai_jobs || []).map(job => '#' + job.trigger_message_id + ' ' + labels[job.state] + (job.error_code ? ' (' + job.error_code + ')' : '')).join(' · ') || '等待参与者消息。';
+    $('retry-ai').disabled = data.session.status !== 'active' || !(data.ai_jobs || []).some(job => job.state === 'error' || (job.state === 'generating' && job.generation_started_ms < Date.now() - 60000));
+  }
+  $('ai-config-form').addEventListener('submit', async event => {
+    event.preventDefault(); const stamp = epoch;
+    $('ai-config-fields').disabled = true;
+    try {
+      const config = {
+        model: $('ai-model').value.trim(), base_prompt: $('ai-base-prompt').value,
+        ms_per_character: Number($('ai-delay-k').value), random_min_ms: Number($('ai-delay-min').value), random_max_ms: Number($('ai-delay-max').value),
+        max_output_tokens: Number($('ai-output-budget').value), reasoning_effort: $('ai-reasoning').value
+      };
+      const data = await call({ action:'admin_save_ai', config });
+      if (stamp !== epoch || !secret) return;
+      updateAiStatus(data); fillAiForm(data.ai_config); status('admin-status','AI 配置已保存。已开始的 AI 任务继续使用原快照。');
+    } catch (error) { if (stamp === epoch) errorAt('admin-status',error); }
+    finally { $('ai-config-fields').disabled = false; }
+  });
+  $('retry-ai').addEventListener('click', async () => {
+    if (!selected || !confirm('重试将重新调用 API 生成尚未成功的回复。继续？')) return;
+    const id = selected.id, stamp = epoch;
+    $('retry-ai').disabled = true;
+    try {
+      await call({ action:'admin_retry_ai', session_id:id });
+      if (stamp !== epoch || selected?.id !== id) return;
+      await readSelected(); status('human-status','已重新排队；参与者页面继续连接时会处理。');
+    } catch (error) { if (stamp === epoch) errorAt('human-status',error); }
   });
   SLP.enterToSend($('human-draft'), $('human-message-form'));
 })();

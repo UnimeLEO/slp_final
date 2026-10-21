@@ -35,7 +35,7 @@
       const data = await call({ action: 'participant_session', session_id: id, after_id: view.cursor });
       if (session?.id !== id) return;
       view.append(data.messages); apply(data.session);
-      if (!pending) status('chat-status', data.session.status === 'ended' ? 'This conversation has ended.' : 'Connected.');
+      if (!pending) status('chat-status', data.service_notice || (data.session.status === 'ended' ? 'This conversation has ended.' : 'Connected.'), !!data.service_notice);
     } catch (error) { showError('chat-status', error); }
     finally {
       polling = false;
@@ -88,7 +88,7 @@
     try {
       await call({ action: 'participant_send', session_id: session.id, ...pending });
       pending = null; $('message-draft').value = ''; $('send-message').textContent = 'Send';
-      status('chat-status', 'Message sent.'); await poll();
+      status('chat-status', 'Message sent.'); void poll();
     } catch (error) { $('send-message').textContent = 'Retry send'; showError('chat-status', error); }
     finally {
       sending = false; $('message-draft').readOnly = !!pending;
