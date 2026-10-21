@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Negotiation Task</title>
+  <link rel="stylesheet" href="./assets/styles.css">
+  <script src="./assets/app.js" defer></script>
+</head>
+<body data-page="participant">
+  <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">N</span><span>Negotiation Task</span></div><span class="quiet">Text interaction study</span></header>
+  <main class="entry-layout">
+    <section class="entry-intro" aria-labelledby="welcome-title">
+      <p class="eyebrow">WELCOME</p>
+      <h1 id="welcome-title">A conversation.<br>A shared solution.</h1>
+      <p class="lead">You will discuss a situation with another interlocutor and try to reach an agreement.</p>
+      <ol class="steps"><li><span>01</span><div><strong>Read your situation</strong><p>Your task instructions will remain available during the conversation.</p></div></li><li><span>02</span><div><strong>Have a conversation</strong><p>Explain your needs, discuss alternatives, and work towards an agreement.</p></div></li><li><span>03</span><div><strong>Share your impressions</strong><p>After both tasks, reflect on your interactions.</p></div></li></ol>
+    </section>
+    <section class="card entry-card" aria-labelledby="join-title">
+      <p class="eyebrow">STUDY ENTRY</p>
+      <h2 id="join-title">Join your session</h2>
+      <p class="muted">Use the participant code and access code supplied by the researcher.</p>
+      <div class="notice" role="status"><strong>The study is being prepared.</strong><p>Session entry is not available yet. Please wait for the researcher's invitation.</p></div>
+      <form id="entry-form">
+        <fieldset disabled>
+          <label for="participant-code">Participant code</label>
+          <input id="participant-code" name="participant_code" placeholder="e.g. P01" autocomplete="off" maxlength="20">
+          <label for="access-code">Access code</label>
+          <input id="access-code" name="access_code" placeholder="Your access code" autocomplete="off" maxlength="64">
+          <button type="submit" class="primary wide">Continue <span aria-hidden="true">→</span></button>
+        </fieldset>
+      </form>
+      <p class="small muted">No conversation or draft text is collected on this preparation page.</p>
+    </section>
+  </main>
+  <footer class="footer"><span>Negotiation Task</span><span>SLP · Development 0.0.1</span></footer>
+</body>
+</html>

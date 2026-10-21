@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>SLP · 研究者工作台</title>
+  <link rel="stylesheet" href="./assets/styles.css">
+  <script src="./assets/app.js" defer></script>
+</head>
+<body data-page="researcher">
+  <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">N</span><span>SLP · 研究者工作台</span></div><span class="badge">开发版 0.0.1</span></header>
+  <main class="workspace">
+    <div class="page-heading"><div><p class="eyebrow">EXPERIMENTAL INTERACTION PLATFORM</p><h1>实验准备</h1><p class="muted">4 名参与者 · 每人 2 次互动 · Human / AI</p></div><a class="button secondary" href="./index.html" target="_blank" rel="noopener">打开参与者页面 ↗</a></div>
+    <div class="notice"><strong>页面框架已就绪，尚未接通实验后端。</strong><p>本版用于检查网页发布与页面布局。创建会话、聊天、AI 回复及研究数据采集将在后续接入后开放。</p></div>
+    <div class="dashboard-grid">
+      <section class="card" aria-labelledby="connection-title">
+        <div class="section-heading"><h2 id="connection-title">后端连接</h2><span class="badge" id="connection-badge">未配置</span></div>
+        <p class="muted">部署 Cloudflare Worker 后，在此检查服务是否可用。</p>
+        <form id="connection-form">
+          <label for="worker-url">Worker 地址</label>
+          <input id="worker-url" name="worker_url" type="url" placeholder="https://your-worker.workers.dev" autocomplete="off" aria-describedby="url-hint">
+          <p id="url-hint" class="small muted">地址仅保存在当前浏览器；此处不填写 API 密钥。参与者端的统一地址将在后续配置文件中设置。</p>
+          <div class="button-row"><button class="primary" type="submit" id="check-connection">保存并检查</button><button class="secondary" type="button" id="clear-connection">清除</button></div>
+        </form>
+        <p id="connection-status" class="status-text" role="status" aria-live="polite">等待配置后端。</p>
+      </section>
+      <section class="card" aria-labelledby="sessions-title">
+        <div class="section-heading"><h2 id="sessions-title">实验会话</h2><span class="badge">待接入</span></div>
+        <div class="empty-state"><span class="empty-symbol" aria-hidden="true">◎</span><h3>暂无已加载的会话</h3><p>接入后端并完成研究者验证后，可创建和管理会话。</p></div>
+        <button class="secondary wide" type="button" disabled>创建参与者与任务</button>
+      </section>
+      <section class="card" aria-labelledby="human-title">
+        <div class="section-heading"><h2 id="human-title">Human 对话</h2><span class="badge">待接入</span></div>
+        <div class="conversation-placeholder"><p class="small muted">角色说明</p><p>选择会话后，这里将显示对话对象的背景、初始立场和让步范围。</p><div class="conversation-empty">等待会话</div></div>
+        <label for="human-draft" class="visually-hidden">回复内容</label><textarea id="human-draft" rows="3" placeholder="选择已连接的会话后回复……" disabled></textarea>
+        <div class="button-row"><button class="primary" type="button" disabled>发送回复</button><button class="secondary" type="button" disabled>终止互动</button></div>
+      </section>
+      <section class="card" aria-labelledby="progress-title">
+        <h2 id="progress-title">本轮部署检查</h2>
+        <ul class="checklist"><li><span class="check ready" aria-hidden="true">✓</span><div><strong>参与者页面</strong><p>英文入口，统一的实验名称与说明。</p></div></li><li><span class="check ready" aria-hidden="true">✓</span><div><strong>研究者工作台</strong><p>实验管理与 Human 对话的统一入口。</p></div></li><li><span class="check" aria-hidden="true">○</span><div><strong>Cloudflare 后端</strong><p>下一步连接会话状态、消息转发与访问验证。</p></div></li><li><span class="check" aria-hidden="true">○</span><div><strong>记录与导出</strong><p>待接入聊天记录和参与者草稿事件。</p></div></li></ul>
+      </section>
+    </div>
+  </main>
+  <footer class="footer"><span>SLP Experimental Interaction Platform</span><span>前端框架 · 0.0.1</span></footer>
+</body>
+</html>
