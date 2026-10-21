@@ -1,39 +1,24 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex, nofollow">
-  <title>Negotiation Task</title>
-  <link rel="stylesheet" href="./assets/styles.css">
-  <script src="./assets/app.js" defer></script>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow">
+<title>Negotiation Task</title><link rel="stylesheet" href="./assets/styles.css?v=010">
+<script src="./assets/config.js?v=010" defer></script><script src="./assets/common.js?v=010" defer></script><script src="./assets/participant.js?v=010" defer></script>
 </head>
 <body data-page="participant">
-  <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">N</span><span>Negotiation Task</span></div><span class="quiet">Text interaction study</span></header>
-  <main class="entry-layout">
-    <section class="entry-intro" aria-labelledby="welcome-title">
-      <p class="eyebrow">WELCOME</p>
-      <h1 id="welcome-title">A conversation.<br>A shared solution.</h1>
-      <p class="lead">You will discuss a situation with another interlocutor and try to reach an agreement.</p>
-      <ol class="steps"><li><span>01</span><div><strong>Read your situation</strong><p>Your task instructions will remain available during the conversation.</p></div></li><li><span>02</span><div><strong>Have a conversation</strong><p>Explain your needs, discuss alternatives, and work towards an agreement.</p></div></li><li><span>03</span><div><strong>Share your impressions</strong><p>After both tasks, reflect on your interactions.</p></div></li></ol>
-    </section>
-    <section class="card entry-card" aria-labelledby="join-title">
-      <p class="eyebrow">STUDY ENTRY</p>
-      <h2 id="join-title">Join your session</h2>
-      <p class="muted">Use the participant code and access code supplied by the researcher.</p>
-      <div class="notice" role="status"><strong>The study is being prepared.</strong><p>Session entry is not available yet. Please wait for the researcher's invitation.</p></div>
-      <form id="entry-form">
-        <fieldset disabled>
-          <label for="participant-code">Participant code</label>
-          <input id="participant-code" name="participant_code" placeholder="e.g. P01" autocomplete="off" maxlength="20">
-          <label for="access-code">Access code</label>
-          <input id="access-code" name="access_code" placeholder="Your access code" autocomplete="off" maxlength="64">
-          <button type="submit" class="primary wide">Continue <span aria-hidden="true">→</span></button>
-        </fieldset>
-      </form>
-      <p class="small muted">No conversation or draft text is collected on this preparation page.</p>
-    </section>
-  </main>
-  <footer class="footer"><span>Negotiation Task</span><span>SLP · Development 0.0.1</span></footer>
-</body>
-</html>
+<header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">N</span><span>Negotiation Task</span></div><span class="quiet">Text interaction study</span></header>
+<main>
+<div class="entry-layout" id="entry-page">
+<section class="entry-intro"><p class="eyebrow">WELCOME</p><h1>A conversation.<br>A shared solution.</h1><p class="lead">Discuss a situation with another interlocutor and try to reach an agreement.</p><ol class="steps"><li><span>01</span><div><strong>Read your situation</strong><p>Your instructions remain available during the conversation.</p></div></li><li><span>02</span><div><strong>Have a conversation</strong><p>Explain your needs and discuss alternatives.</p></div></li><li><span>03</span><div><strong>Finish when you are ready</strong><p>Use End conversation when you wish to stop.</p></div></li></ol></section>
+<section class="card entry-card"><p class="eyebrow">STUDY ENTRY</p><h2>Join your session</h2><div class="notice"><strong>Development test</strong><p>Sent messages will be saved for testing. Draft logging and the post-task questionnaire are not enabled in this version. This is not the formal study.</p></div>
+<form id="entry-form"><fieldset id="entry-fields"><label for="participant-code">Participant code</label><input id="participant-code" name="participant_code" placeholder="e.g. TEST01" autocomplete="off" required maxlength="20"><label for="access-code">Access code</label><input id="access-code" name="access_code" placeholder="XXXX-XXXX-XXXX" autocomplete="off" required maxlength="64"><button class="primary wide" id="join-button">Continue →</button></fieldset></form><p id="entry-status" class="status-text" role="status" aria-live="polite"></p></section>
+</div>
+<div id="conversation-page" class="workspace" hidden>
+<div class="page-heading"><div><p class="eyebrow">NEGOTIATION TASK</p><h1 id="task-heading">Your conversation</h1><p id="task-label" class="muted"></p></div><span class="badge" id="session-status">Ready</span></div>
+<div class="chat-layout">
+<aside class="card task-aside"><h2>Your situation</h2><p id="task-prompt" class="preserve-lines"></p><div class="notice small">Development test · Sent messages are saved. Draft logging is not enabled.</div><button class="primary wide" id="start-task">Start conversation</button><button class="secondary wide" id="end-task" hidden>End conversation</button><button class="primary wide" id="next-task" hidden>Continue</button></aside>
+<section class="card chat-card"><div class="section-heading"><h2>Interlocutor X</h2><span class="badge">Conversation</span></div><div id="messages" class="messages" role="log" aria-live="polite" aria-label="Conversation messages"><p class="empty-message">Your conversation will appear here.</p></div><form id="message-form"><label for="message-draft" class="visually-hidden">Write a message</label><textarea id="message-draft" rows="3" placeholder="Write a message…" disabled maxlength="10000"></textarea><div class="composer-bar"><span class="small muted">Enter to send · Shift + Enter for a new line</span><button class="primary" id="send-message" disabled>Send</button></div></form><p id="chat-status" class="status-text" role="status" aria-live="polite"></p></section>
+</div></div>
+<div id="complete-page" class="card completion" hidden><p class="eyebrow">COMPLETE</p><h1>Thank you.</h1><p>Both conversations have ended. Please contact the researcher for the next step.</p><p class="small muted">Development version: the post-task questionnaire will be added later.</p></div>
+</main><footer class="footer"><span>Negotiation Task</span><span>SLP · Development 0.1.0</span></footer>
+</body></html>
