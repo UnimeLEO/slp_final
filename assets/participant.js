@@ -4,6 +4,7 @@
   const query = new URLSearchParams(location.search);
   let base = '', credentials = null, session = null, pollTimer = null, polling = false;
   let pending = null, sending = false, controlBusy = false;
+  let pollFailures = 0;
   let recorder = null, recordingFinishing = null, initialSync = true;
   const interlocutorName = window.SLP_CONFIG.INTERLOCUTOR_NAME || 'Jimmy';
   $('interlocutor-name').textContent = interlocutorName;
@@ -83,14 +84,14 @@
       const data = await call({ action: 'participant_session', session_id: id, after_id: view.cursor });
       if (session?.id !== id) return;
       view.append(data.messages); apply(data.session);
-      initialSync=false;
+      initialSync=false;pollFailures=0;
       if (data.session.status === 'ended' && recorder) await finishRecording('server_ended');
       if (!pending) status('chat-status', data.service_notice || (data.session.status === 'ended' ? 'This conversation has ended.' : ''), !!data.service_notice);
-    } catch (error) { showError('chat-status', error); }
+    } catch (error) { pollFailures++;showError('chat-status', error); }
     finally {
       polling = false;
       clearTimeout(pollTimer);
-      if (session?.status !== 'ended') pollTimer = setTimeout(poll, document.hidden ? 5000 : 1500);
+      if (session?.status !== 'ended') pollTimer = setTimeout(poll, pollFailures ? Math.min(60000,3000*2**Math.min(pollFailures,5)) : document.hidden ? 5000 : 1500);
     }
   }
   async function openNext() {

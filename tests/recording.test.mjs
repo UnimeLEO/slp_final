@@ -25,7 +25,7 @@ test('recording is participant-owned, immutable on retry, and hidden from partic
   assert.equal((await other.participant({action:'participant_events',session_id:'01-T1'})).response.status,403);
   const publicData=(await f.participant({action:'participant_session',session_id:'01-T1'})).data;
   assert.equal('drafts' in publicData,false); assert.equal('events' in publicData,false);
-  const monitor=(await f.admin({action:'admin_session',session_id:'01-T1'})).data.recording;
+  const monitor=(await f.admin({action:'admin_session',include_recording:true,session_id:'01-T1'})).data.recording;
   assert.equal(monitor.event_count,3);assert.equal(monitor.pages[0].missing_events,0);assert.equal(monitor.pages[0].acknowledged_tail_complete,false);
   const exported=(await f.admin({action:'admin_export',participant_code:'01'})).data;
   assert.equal(exported.format_version,3);assert.equal(exported.recording.drafts[0].text,'Hi');
@@ -60,10 +60,10 @@ test('out-of-order batches report missing sequence numbers and close only when t
   const f=await fixture();
   const page={...f.page,declared_seq:4,closed:true};
   assert.equal((await f.ingest({page,events:[f.event(4,'page_end')]})).response.status,200);
-  let data=(await f.admin({action:'admin_session',session_id:'01-T1'})).data.recording;
+  let data=(await f.admin({action:'admin_session',include_recording:true,session_id:'01-T1'})).data.recording;
   assert.equal(data.pages[0].missing_events,3);assert.equal(data.pages[0].acknowledged_tail_complete,false);
   await f.ingest({page});
-  data=(await f.admin({action:'admin_session',session_id:'01-T1'})).data.recording;
+  data=(await f.admin({action:'admin_session',include_recording:true,session_id:'01-T1'})).data.recording;
   assert.equal(data.pages[0].missing_events,0);assert.equal(data.pages[0].acknowledged_tail_complete,true);
 });
 test('researcher termination retains unsent drafts and accepts queued events, not chat messages',async()=>{
@@ -112,6 +112,31 @@ test('migration 003 is repeatable, preserves chat, and v0.3 Worker keeps schema-
   f.env.DB.db.exec(migration);f.env.DB.db.exec(migration);
   assert.equal(f.env.DB.db.prepare('SELECT text FROM messages').get().text,'existing');
   assert.equal((await f.ingest()).response.status,200);
-  const summary=(await f.admin({action:'admin_session',session_id:'01-T1'})).data.recording;
+  const summary=(await f.admin({action:'admin_session',include_recording:true,session_id:'01-T1'})).data.recording;
   assert.equal(summary.messages_without_draft,1);
+});
+
+test('ordinary monitoring never scans event history; full counts require an explicit request',async()=>{
+ const f=await fixture();await f.ingest();
+ const db=f.env.DB,prepare=db.prepare.bind(db),queries=[];
+ db.prepare=sql=>{queries.push(sql);return prepare(sql);};
+ const normal=(await f.admin({action:'admin_session',session_id:'01-T1'})).data;
+ assert.equal('recording' in normal,false);
+ assert.equal(queries.some(sql=>sql.includes('interaction_events')),false);
+ const full=(await f.admin({action:'admin_session',session_id:'01-T1',include_recording:true})).data;
+ assert.equal(full.recording.event_count,3);
+});
+test('both conflict checks use exact indexed sequence lookups rather than a history scan',async()=>{
+ const f=await fixture();await f.ingest();
+ const db=f.env.DB,prepare=db.prepare.bind(db),queries=[];
+ db.prepare=sql=>({bind(...args){queries.push({sql,args});return prepare(sql).bind(...args);}});
+ const result=await f.ingest();assert.equal(result.response.status,200);
+ const checks=queries.filter(row=>row.sql.startsWith('SELECT e.seq'));
+ assert.equal(checks.length,2);
+ for(const {sql,args} of checks) {
+   const plan=db.db.prepare('EXPLAIN QUERY PLAN '+sql).all(...args).map(row=>row.detail);
+   const eventLookup=plan.find(row=>row.includes('SEARCH e'));
+   assert.match(eventLookup,/session_id=\? AND page_id=\? AND seq=\?/);
+   assert.ok(plan.findIndex(row=>row.includes('SCAN j'))<plan.findIndex(row=>row.includes('SEARCH e')));
+ }
 });

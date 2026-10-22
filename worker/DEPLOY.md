@@ -124,3 +124,7 @@ https://你的实际Worker域名/health
 更正 Cloudflare 密钥后，可以在管理端点击重试。模型与参数已冻结到开始时的任务快照；更改模型参数需创建新的测试任务。
 
 现有 SLP Worker 同时服务两端。如为整个 Worker 启用 Cloudflare Access 登录保护，会影响 GitHub Pages 的跨域 API 请求；研究者操作由 `ADMIN_SECRET` 验证。
+
+## 0.3.2: prevent excessive D1 reads
+
+Replace the deployed Worker with the current `worker/worker.mjs` and deploy. No SQL migration or secret changes are needed. Hard-refresh the participant and researcher pages to load assets tagged `v=032`. Check `/health` for version `0.3.2` once D1 is available again. An exhausted daily account quota remains blocked until its reset or a plan change; deploying this fix does not restore the consumed quota.

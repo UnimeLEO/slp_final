@@ -21,7 +21,7 @@ class MemoryStore {
   async acknowledge(ids) { for(const id of ids) this.events.delete(id); }
 }
 function environment() {
-  const win=new Target();win.window=win;win.setInterval=()=>1;win.clearInterval=()=>{};win.innerHeight=800;win.innerWidth=1200;
+  const win=new Target();win.window=win;win.setInterval=callback=>{win.intervalTick=callback;return 1;};win.clearInterval=()=>{};win.innerHeight=800;win.innerWidth=1200;
   const doc=new Target();doc.hidden=false;doc.visibilityState='visible';
   const source=readFileSync(new URL('../assets/logging.js',import.meta.url),'utf8');
   vm.runInNewContext(source,{window:win,document:doc,navigator:{},structuredClone,TextEncoder,performance,crypto,console});
@@ -130,7 +130,7 @@ test('recorder events round-trip through the actual Worker, including sending, r
   const result=await f.actor.participant({action:'participant_send',session_id:'01-T1',...send});assert.equal(result.response.status,200);
   await f.recorder.acknowledge(result.data.message);edit(f,'not sent');await f.recorder.stop('ended_by_participant');
   await f.actor.participant({action:'participant_end',session_id:'01-T1'});
-  const summary=(await f.actor.admin({action:'admin_session',session_id:'01-T1'})).data.recording;
+  const summary=(await f.actor.admin({action:'admin_session',include_recording:true,session_id:'01-T1'})).data.recording;
   assert.equal(summary.messages_without_draft,0);assert.equal(summary.pages[0].missing_events,0);assert.equal(summary.pages[0].acknowledged_tail_complete,true);
   const drafts=f.context.env.DB.db.prepare('SELECT * FROM drafts ORDER BY created_ms').all();
   assert.equal(drafts.find(d=>d.draft_id===send.draft_id).state,'sent');assert.equal(drafts.find(d=>d.draft_id!==send.draft_id).text,'not sent');
@@ -150,7 +150,7 @@ test('refresh with queued old-page events and a lost send ack preserves linkage 
   const confirmed=await first.actor.participant({action:'participant_send',session_id:'01-T1',...retry});
   assert.equal(confirmed.data.message.id,message.id);
   await second.recorder.acknowledge(confirmed.data.message);await second.recorder.stop('test');
-  const summary=(await first.actor.admin({action:'admin_session',session_id:'01-T1'})).data.recording;
+  const summary=(await first.actor.admin({action:'admin_session',include_recording:true,session_id:'01-T1'})).data.recording;
   assert.equal(summary.pages.length,2);assert.equal(summary.pages.every(page=>page.missing_events===0),true);
   assert.equal(summary.pages.some(page=>!page.closed),true);assert.equal(summary.messages_without_draft,0);
   second.recorder.dispose();
@@ -160,4 +160,18 @@ test('maximum-length replacement with control characters stays below upload boun
   edit(f,text);edit(f,text,'insertFromPaste');f.recorder.prepareSend();await f.recorder.persist();await f.recorder.flushAll();
   const row=f.context.env.DB.db.prepare('SELECT raw_at_send,text FROM drafts').get();assert.equal(row.raw_at_send,text);assert.equal(row.text,text);
   await f.recorder.stop('test');f.recorder.dispose();
+});
+
+
+test('automatic upload retries back off while queued events remain durable',async()=>{
+ const f=await fixture();let calls=0;
+ f.recorder.call=async()=>{calls++;throw new Error('quota unavailable');};
+ edit(f,'keep this draft');await f.recorder.persist();
+ await assert.rejects(f.recorder.flush());
+ const queued=f.recorder.queue.length;assert.ok(queued>0);
+ for(let n=0;n<10;n++)f.win.intervalTick();
+ await Promise.resolve();assert.equal(calls,1);assert.equal(f.recorder.queue.length,queued);
+ f.recorder.retryAfter=0;f.win.intervalTick();await f.recorder.flushFlight.catch(()=>{});
+ assert.equal(calls,2);assert.ok(f.recorder.retryAfter>0);
+ f.recorder.dispose();
 });

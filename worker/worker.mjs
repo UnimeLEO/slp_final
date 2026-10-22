@@ -1,7 +1,7 @@
-// SLP v0.3.0 — Participant draft recording, durable event sync and Human/AI chat.
+// SLP v0.3.2 — Participant draft recording, durable event sync and Human/AI chat.
 // Bind a dedicated D1 database as DB, set ADMIN_SECRET (Secret, >=20 characters).
 // Optional ALLOWED_ORIGIN (Text) defaults to this project's GitHub Pages origin.
-const VERSION = '0.3.0';
+const VERSION = '0.3.2';
 const DEFAULT_ORIGIN = 'https://unimeleo.github.io';
 const MAX_BODY_BYTES = 524288;
 
@@ -385,7 +385,7 @@ function resolveDraftsStatement(db, sessionId) {
   return statement(db, `UPDATE drafts SET message_id=(SELECT id FROM messages WHERE session_id=drafts.session_id AND sender='participant' AND client_message_id=drafts.client_message_id),
     raw_at_send=COALESCE(raw_at_send,(SELECT json_extract(payload_json,'$.payload.raw_text') FROM interaction_events WHERE session_id=drafts.session_id AND draft_id=drafts.draft_id AND event_type='send_attempt' ORDER BY rowid LIMIT 1)),
     state=CASE WHEN EXISTS(SELECT 1 FROM messages WHERE session_id=drafts.session_id AND sender='participant' AND client_message_id=drafts.client_message_id) THEN 'sent'
-    WHEN EXISTS(SELECT 1 FROM sessions WHERE id=drafts.session_id AND status='ended') THEN 'unsent' ELSE state END WHERE session_id=?`, sessionId);
+    WHEN EXISTS(SELECT 1 FROM sessions WHERE id=drafts.session_id AND status='ended') THEN 'unsent' ELSE state END WHERE session_id=? AND (message_id IS NULL OR raw_at_send IS NULL)`, sessionId);
 }
 async function ingestRecording(db, session, body) {
   await requireRecording(db);
@@ -422,7 +422,7 @@ async function ingestRecording(db, session, body) {
   }
   await checkRecordingIdentity(db, session.id, [page], drafts);
   const encoded = JSON.stringify(events);
-  const conflict = await statement(db, `SELECT e.seq FROM interaction_events e JOIN json_each(?) j ON e.seq=json_extract(j.value,'$.seq')
+  const conflict = await statement(db, `SELECT e.seq FROM json_each(?) j CROSS JOIN interaction_events e ON e.seq=json_extract(j.value,'$.seq')
     WHERE e.session_id=? AND e.page_id=? AND e.payload_json!=json(j.value) LIMIT 1`, encoded, session.id, page.page_id).first();
   if (conflict) fail(409, 'Recording event identifier conflict.');
   const now = Date.now();
@@ -434,7 +434,7 @@ async function ingestRecording(db, session, body) {
       CASE WHEN EXISTS(SELECT 1 FROM sessions WHERE id=? AND status='ended') THEN 1 ELSE 0 END FROM json_each(?)`, session.id, page.page_id, now, session.id, encoded),
     resolveDraftsStatement(db, session.id)
   ]);
-  const racedConflict = await statement(db, `SELECT e.seq FROM interaction_events e JOIN json_each(?) j ON e.seq=json_extract(j.value,'$.seq')
+  const racedConflict = await statement(db, `SELECT e.seq FROM json_each(?) j CROSS JOIN interaction_events e ON e.seq=json_extract(j.value,'$.seq')
     WHERE e.session_id=? AND e.page_id=? AND e.payload_json!=json(j.value) LIMIT 1`, encoded, session.id, page.page_id).first();
   if (racedConflict) fail(409, 'Recording event identifier conflict.');
   return { accepted_sequences: events.map(event => event.seq), page_id: page.page_id, server_received_ms: now };
@@ -497,7 +497,7 @@ async function api(request, env, body) {
     const session = await findSession(db, body.session_id);
     if (action === 'admin_session') {
       const ai_jobs = (await statement(db, 'SELECT id,state,trigger_message_id,error_code,attempt,generation_started_ms,generation_completed_ms,ready_after_ms,delivered_ms FROM ai_jobs WHERE session_id=? ORDER BY trigger_message_id', session.id).all()).results;
-      return { session, messages: await readMessages(db, session.id, body.after_id ?? 0, true), ai_jobs, recording:await recordingSummary(db,session.id) };
+      return { session, messages: await readMessages(db, session.id, body.after_id ?? 0, true), ai_jobs, ...(body.include_recording === true ? {recording:await recordingSummary(db,session.id)} : {}) };
     }
     if (action === 'admin_retry_ai') {
       if (session.condition !== 'ai' || session.status !== 'active') fail(409, 'No active AI session selected.');

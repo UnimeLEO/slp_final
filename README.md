@@ -120,3 +120,11 @@ Participant sends now display the server-confirmed message immediately, without 
 Open a task in the researcher console and click **下载当前任务 ZIP**. Each archive contains only that task: `data.json`, `chat.csv`, `chat.txt`, `events.csv`, and `timeline.txt`. All files use the same fetched export snapshot; integrity warnings are retained in JSON and the timeline. End the task and allow recording to sync before taking a final export. ZIP compression runs locally in the browser with no external library or upload.
 
 This release changes frontend files only. Refresh GitHub Pages after deployment; no Worker deployment or D1 migration is needed. The Worker health version remains 0.3.0.
+
+### Read-efficiency fix 0.3.2
+
+Deploy `worker/worker.mjs` to the existing Worker, then hard-refresh both Pages interfaces. No D1 migration is required. Worker health reports 0.3.2. Deployment does not reset an exhausted Cloudflare account quota.
+
+Both upload conflict checks now iterate the incoming JSON batch first and perform exact `(session_id,page_id,seq)` indexed lookups, avoiding history-by-batch scans. Fully linked sent drafts are no longer updated on every event upload. Ordinary `admin_session` calls omit recording aggregates by default; send `include_recording:true` for a full summary. The researcher UI requests that summary when opening a task or clicking **刷新记录统计**, rather than on every chat poll. The session list refreshes every 15 seconds. Chat polling and automatic recording uploads use capped exponential backoff after errors; durable local events are retained.
+
+Validated by 42 automated tests, including query-plan checks for both indexed conflict lookups, an assertion that normal monitoring never queries the event table, and automatic upload retry backoff. Query-plan/VM measurements are local SQLite evidence, not measured Cloudflare billable rows.

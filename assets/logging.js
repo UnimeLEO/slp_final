@@ -94,7 +94,7 @@
       } else this.newDraft();
       this.bind();
       await this.persist();
-      this.timer=this.win.setInterval(()=>{ void this.flush().catch(()=>{}); },1000);
+      this.timer=this.win.setInterval(()=>{ if(this.now()>=(this.retryAfter || 0)) void this.flush().catch(()=>{}); },1000);
       void this.flush().catch(()=>{});
       return this;
     }
@@ -265,11 +265,12 @@
         const ids=new Set(batch.selected.map(event=>event.id));
         await this.store.acknowledge([...ids]);
         this.queue=this.queue.filter(event=>!ids.has(event.id));
+        this.retryAfter=0;this.syncFailures=0;
         this.onStatus('',false);
         if(this.closed && !this.queue.length && this.timer) { this.win.clearInterval(this.timer);this.timer=null; }
       })();
       try { return await this.flushFlight; }
-      catch(error) { this.onStatus('Typing data is waiting to be saved. Keep this page open, or save a local backup.',true);throw error; }
+      catch(error) { this.syncFailures=(this.syncFailures || 0)+1;this.retryAfter=this.now()+Math.min(60000,3000*2**Math.min(this.syncFailures,5));this.onStatus('Typing data is waiting to be saved. Keep this page open, or save a local backup.',true);throw error; }
       finally { this.flushFlight=null; }
     }
     async flushAll() {

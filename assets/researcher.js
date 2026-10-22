@@ -3,7 +3,7 @@
   const { $, api, status } = SLP;
   const storageKey = 'slp_final_worker_url_v1';
   let base = '', secret = '', selected = null, pending = null, sending = false;
-  let timer = null, busy = false, epoch = 0, lastList = 0, aiLoaded = false, selectVersion = 0;
+  let timer = null, busy = false, epoch = 0, lastList = 0, aiLoaded = false, selectVersion = 0, pollFailures = 0;
   const view = SLP.chatView($('human-messages'), 'interlocutor');
   try { $('worker-url').value = localStorage.getItem(storageKey) || window.SLP_CONFIG.API_BASE; } catch (_) { /* optional local setting */ }
   const call = body => api(base, body, secret);
@@ -48,10 +48,10 @@
     }
     $('session-rows').replaceChildren(fragment); lastList = performance.now();
   }
-  async function readSelected() {
+  async function readSelected({recording=false} = {}) {
     if (!selected) return;
     const id = selected.id, stamp = epoch;
-    const data = await call({ action: 'admin_session', session_id: id, after_id: view.cursor });
+    const data = await call({ action: 'admin_session', session_id: id, after_id: view.cursor, include_recording: recording });
     if (stamp !== epoch || selected?.id !== id || !secret) return;
     view.append(data.messages); sessionState(data.session); showAiJobs(data);showRecording(data.recording);
   }
@@ -60,15 +60,16 @@
     busy = true;
     const stamp = epoch;
     try {
-      if (performance.now() - lastList > 6000) await refreshList();
-      await readSelected();
+      if (performance.now() - lastList > 15000) await refreshList();
+      await readSelected();pollFailures=0;
     } catch (error) {
       if (stamp !== epoch) return;
+      pollFailures++;
       if (error.status === 401) { lock(); status('admin-status', '验证已失效，请重新连接。', true); }
       else errorAt('admin-status', error);
     } finally {
       busy = false; clearTimeout(timer);
-      if (secret) timer = setTimeout(poll, document.hidden ? 5000 : 1500);
+      if (secret) timer = setTimeout(poll, pollFailures ? Math.min(60000,3000*2**Math.min(pollFailures,5)) : document.hidden ? 10000 : 1500);
     }
   }
   async function openSession(id) {
@@ -77,7 +78,7 @@
     if ($('human-draft').value.trim() && !pending && !confirm('当前输入框有未发送内容。切换会话并清除草稿？')) return;
     const stamp = epoch, selection = ++selectVersion;
     try {
-      const data = await call({ action: 'admin_session', session_id: id, after_id: 0 });
+      const data = await call({ action: 'admin_session', session_id: id, after_id: 0, include_recording: true });
       if (stamp !== epoch || selection !== selectVersion || !secret) return;
       pending = null; $('human-draft').value = ''; $('human-draft').readOnly = false;
       $('human-send').textContent = '发送回复';
@@ -123,6 +124,12 @@
       field.focus(); field.select();
       status('admin-status', '请手动复制选中的访问码。');
     }
+  });
+  $('refresh-recording').addEventListener('click', async () => {
+    $('refresh-recording').disabled=true;
+    try { await readSelected({recording:true}); }
+    catch(error) { errorAt('human-status',error); }
+    finally { $('refresh-recording').disabled=false; }
   });
   $('refresh-sessions').addEventListener('click', () => refreshList().catch(error => errorAt('admin-status', error)));
   $('create-form').addEventListener('submit', async event => {
@@ -203,10 +210,11 @@
     finally { button.disabled = false; }
   });
   function showRecording(recording) {
+    if (!recording) return;
     if(!recording?.enabled) { $('recording-summary').textContent='记录功能尚未启用，请完成数据库迁移。';return; }
     const missing=recording.pages.reduce((sum,page)=>sum+page.missing_events,0);
     const open=recording.pages.filter(page=>!page.closed).length;
-    $('recording-summary').textContent=recording.event_count+' 条事件 · '+recording.drafts+' 条草稿 · 已声明序列缺失 '+missing+' 条 · 未关闭页面段 '+open+' 个'+(recording.messages_without_draft?' · '+recording.messages_without_draft+' 条消息无草稿关联':'')+'。当前计数仅涵盖服务器已收到的数据。';
+    $('recording-summary').textContent=recording.event_count+' 条事件 · '+recording.drafts+' 条草稿 · 已声明序列缺失 '+missing+' 条 · 未关闭页面段 '+open+' 个'+(recording.messages_without_draft?' · '+recording.messages_without_draft+' 条消息无草稿关联':'')+'。此为最近一次手动查询的统计，仅涵盖服务器已收到的数据。';
   }
   function fillAiForm(config) {
     if (!config) return;
