@@ -176,15 +176,13 @@
   });
   for (const button of document.querySelectorAll('[data-export]')) button.addEventListener('click', async () => {
     if (!selected) return;
-    const stamp = epoch, code = selected.participant_code;
+    const stamp = epoch, code = selected.participant_code, sessionId = selected.id;
     button.disabled = true;
     try {
       const data = await call({ action: 'admin_export', participant_code: code });
       if (stamp !== epoch || !secret) return;
       const format = button.dataset.export;
-      const extension=format==='events'?'csv':format==='timeline'?'txt':format;
-      const filename = code + '_' + (['events','timeline'].includes(format)?format:'chat') + '_' + new Date().toISOString().replace(/[:.]/g, '-') + '.' + extension;
-      if (['json','events','timeline'].includes(format) && data.recording?.enabled) {
+      if (['zip','json','events','timeline'].includes(format) && data.recording?.enabled) {
         const events=[];let cursor=0,more=true;
         while(more) {
           const part=await call({action:'admin_recording_export',participant_code:code,after_event_row:cursor,through_event_row:data.recording.events_upper_row});
@@ -196,24 +194,11 @@
         data.recording.events=events;
         data.recording.integrity=SLPExport.integrity(data);
       }
-      if(format==='events') SLP.download(SLPExport.eventsCSV(data),filename,'text/csv;charset=utf-8');
-      if(format==='timeline') SLP.download(SLPExport.timeline(data),filename,'text/plain;charset=utf-8');
-      if (format === 'json') SLP.download(JSON.stringify(data, null, 2), filename, 'application/json');
-      if (format === 'csv') {
-        const headers = ['session_id', 'id', 'sender', 'text', 'server_received_ms', 'client_message_id'];
-        const quote = value => '"' + String(value ?? '').replace(/"/g, '""') + '"';
-        const rows = data.messages.map(row => headers.map(key => quote(row[key])).join(','));
-        SLP.download('\uFEFF' + headers.join(',') + '\r\n' + rows.join('\r\n'), filename, 'text/csv;charset=utf-8');
-      }
-      if (format === 'txt') {
-        const lines = ['SLP ' + code, 'Sent chat messages only. Use full JSON, event CSV or draft timeline for production data.'];
-        for (const session of data.sessions) {
-          lines.push('', '=== ' + session.id + ' | ' + session.condition + ' | ' + session.status + ' ===');
-          for (const message of data.messages.filter(m => m.session_id === session.id)) lines.push(new Date(message.server_received_ms).toISOString() + ' ' + message.sender + ': ' + message.text);
-        }
-        SLP.download(lines.join('\n'), filename, 'text/plain;charset=utf-8');
-      }
-      status('human-status', '已触发 ' + format.toUpperCase() + ' 下载。');
+      const task = SLPExport.taskData(data, sessionId);
+      const archive = await SLPExport.zip(SLPExport.taskFiles(task));
+      if (stamp !== epoch || !secret) return;
+      SLP.download(archive, sessionId + '_' + new Date(data.exported_ms).toISOString().replace(/[:.]/g, '-') + '.zip', 'application/zip');
+      status('human-status', sessionId + ' 的 ZIP 已下载（包含完整数据、聊天、事件和草稿时间线）。');
     } catch (error) { if (stamp === epoch) errorAt('human-status', error); }
     finally { button.disabled = false; }
   });

@@ -62,5 +62,59 @@
     }
     return lines.join('\n');
   }
-  window.SLPExport={integrity,eventsCSV,timeline};
+
+  function taskData(data, sessionId) {
+    const session=data.sessions.find(row=>row.id===sessionId);
+    if(!session) throw new Error('Task not found in export.');
+    const task={...data,sessions:[session],session_id:sessionId};
+    for(const key of ['messages','ai_jobs','ai_configs']) task[key]=(data[key] || []).filter(row=>row.session_id===sessionId);
+    if(data.recording) {
+      task.recording={...data.recording,exported_while_active:session.status==='active'};
+      for(const key of ['pages','drafts','summaries','events']) task.recording[key]=(data.recording[key] || []).filter(row=>row.session_id===sessionId);
+      task.recording.integrity=integrity(task);
+    }
+    return task;
+  }
+  function taskFiles(data) {
+    const headers=['session_id','id','sender','text','server_received_ms','client_message_id'];
+    const csv='\uFEFF'+[headers,...data.messages.map(row=>headers.map(key=>row[key]))].map(row=>row.map(quote).join(',')).join('\r\n');
+    const lines=['SLP '+data.participant_code,'Sent chat messages only.'];
+    for(const session of data.sessions) {
+      lines.push('','=== '+session.id+' | '+session.condition+' | '+session.status+' ===');
+      for(const message of data.messages.filter(row=>row.session_id===session.id)) lines.push(new Date(message.server_received_ms).toISOString()+' '+message.sender+': '+message.text);
+    }
+    return {'data.json':JSON.stringify(data,null,2),'chat.csv':csv,'chat.txt':lines.join('\n'),'events.csv':eventsCSV(data),'timeline.txt':timeline(data)};
+  }
+  // Standard ZIP, UTF-8 names, CRC-32 and raw DEFLATE. No CDN dependency or uploads.
+  // Older browsers without CompressionStream still get a valid uncompressed ZIP.
+  async function zip(files) {
+    const encoder=new TextEncoder(), local=[],central=[];let offset=0;
+    const header=size=>new Uint8Array(size);
+    const crc32=bytes=>{
+      let crc=0xffffffff;
+      for(const byte of bytes) {crc^=byte;for(let bit=0;bit<8;bit++) crc=(crc>>>1)^((crc&1)?0xedb88320:0);}
+      return (crc^0xffffffff)>>>0;
+    };
+    const entries=Object.entries(files);
+    for(const [name,text] of entries) {
+      const nameBytes=encoder.encode(name),raw=encoder.encode(text);let bytes=raw,method=0;
+      if(typeof CompressionStream!=='undefined') {
+        let stream;try {stream=new CompressionStream('deflate-raw');}catch(_) { /* STORE fallback */ }
+        if(stream) {bytes=new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(stream)).arrayBuffer());method=8;}
+      }
+      const crc=crc32(raw),h=header(30),v=new DataView(h.buffer);
+      v.setUint32(0,0x04034b50,true);v.setUint16(4,20,true);v.setUint16(6,0x800,true);v.setUint16(8,method,true);v.setUint16(12,33,true);
+      v.setUint32(14,crc,true);v.setUint32(18,bytes.length,true);v.setUint32(22,raw.length,true);v.setUint16(26,nameBytes.length,true);
+      local.push(h,nameBytes,bytes);
+      const c=header(46),w=new DataView(c.buffer);
+      w.setUint32(0,0x02014b50,true);w.setUint16(4,20,true);w.setUint16(6,20,true);w.setUint16(8,0x800,true);w.setUint16(10,method,true);w.setUint16(14,33,true);
+      w.setUint32(16,crc,true);w.setUint32(20,bytes.length,true);w.setUint32(24,raw.length,true);w.setUint16(28,nameBytes.length,true);w.setUint32(42,offset,true);
+      central.push(c,nameBytes);offset+=h.length+nameBytes.length+bytes.length;
+    }
+    const size=central.reduce((sum,part)=>sum+part.length,0),end=header(22),v=new DataView(end.buffer);
+    if(entries.length>65535 || offset+size>0xffffffff) throw new Error('ZIP exceeds supported size.');
+    v.setUint32(0,0x06054b50,true);v.setUint16(8,entries.length,true);v.setUint16(10,entries.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);
+    return new Blob([...local,...central,end],{type:'application/zip'});
+  }
+  window.SLPExport={integrity,eventsCSV,timeline,taskData,taskFiles,zip};
 })();

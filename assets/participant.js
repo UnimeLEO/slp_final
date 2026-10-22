@@ -140,6 +140,9 @@
     try {
       await recorder.persist();
       const data=await call({ action: 'participant_send', session_id: session.id, ...payload });
+      // Show the confirmed message without waiting for a poll/model generation.
+      // Only poll responses may advance the cursor: older unseen replies can still exist.
+      view.append([data.message], { advanceCursor: false });
       await recorder.acknowledge(data.message);
       pending = null;$('send-message').textContent = 'Send';
       status('chat-status', 'Message sent.'); void poll();

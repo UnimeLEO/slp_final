@@ -112,3 +112,11 @@ node --test tests/*.test.mjs
 - **0.2.1**：简约灰白界面、手绘布局、数字编号、分段访问码输入及单独复制。
 
 - **0.3.0**：Participant 草稿与事件记录、IndexedDB 暂存、重试恢复、消息呈现观察、完整性检查及事件导出。
+
+### Frontend update 0.3.1
+
+Participant sends now display the server-confirmed message immediately, without waiting for the next AI-processing poll. Confirmed sends do not advance the polling cursor, so an earlier unseen reply cannot be skipped. Both conditions share this display path.
+
+Open a task in the researcher console and click **下载当前任务 ZIP**. Each archive contains only that task: `data.json`, `chat.csv`, `chat.txt`, `events.csv`, and `timeline.txt`. All files use the same fetched export snapshot; integrity warnings are retained in JSON and the timeline. End the task and allow recording to sync before taking a final export. ZIP compression runs locally in the browser with no external library or upload.
+
+This release changes frontend files only. Refresh GitHub Pages after deployment; no Worker deployment or D1 migration is needed. The Worker health version remains 0.3.0.
