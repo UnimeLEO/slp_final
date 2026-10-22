@@ -53,7 +53,7 @@
     const id = selected.id, stamp = epoch;
     const data = await call({ action: 'admin_session', session_id: id, after_id: view.cursor });
     if (stamp !== epoch || selected?.id !== id || !secret) return;
-    view.append(data.messages); sessionState(data.session); showAiJobs(data);
+    view.append(data.messages); sessionState(data.session); showAiJobs(data);showRecording(data.recording);
   }
   async function poll() {
     if (busy || !secret) return;
@@ -81,7 +81,7 @@
       if (stamp !== epoch || selection !== selectVersion || !secret) return;
       pending = null; $('human-draft').value = ''; $('human-draft').readOnly = false;
       $('human-send').textContent = '发送回复';
-      view.reset(); view.append(data.messages); sessionState(data.session); showAiJobs(data);
+      view.reset(); view.append(data.messages); sessionState(data.session); showAiJobs(data);showRecording(data.recording);
       $('human-title').textContent = data.session.id + ' · ' + (data.session.condition === 'human' ? 'Human 对话' : 'AI 任务监控');
       $('human-role').textContent = data.session.interlocutor_prompt;
       $('human-participant-prompt').textContent = data.session.participant_prompt;
@@ -182,7 +182,22 @@
       const data = await call({ action: 'admin_export', participant_code: code });
       if (stamp !== epoch || !secret) return;
       const format = button.dataset.export;
-      const filename = code + '_chat_' + new Date().toISOString().replace(/[:.]/g, '-') + '.' + format;
+      const extension=format==='events'?'csv':format==='timeline'?'txt':format;
+      const filename = code + '_' + (['events','timeline'].includes(format)?format:'chat') + '_' + new Date().toISOString().replace(/[:.]/g, '-') + '.' + extension;
+      if (['json','events','timeline'].includes(format) && data.recording?.enabled) {
+        const events=[];let cursor=0,more=true;
+        while(more) {
+          const part=await call({action:'admin_recording_export',participant_code:code,after_event_row:cursor,through_event_row:data.recording.events_upper_row});
+          if(stamp!==epoch || !secret) return;
+          events.push(...part.events);more=part.has_more;
+          if(more && part.next_cursor<=cursor) throw new Error('事件导出游标没有前进。');
+          cursor=part.next_cursor;
+        }
+        data.recording.events=events;
+        data.recording.integrity=SLPExport.integrity(data);
+      }
+      if(format==='events') SLP.download(SLPExport.eventsCSV(data),filename,'text/csv;charset=utf-8');
+      if(format==='timeline') SLP.download(SLPExport.timeline(data),filename,'text/plain;charset=utf-8');
       if (format === 'json') SLP.download(JSON.stringify(data, null, 2), filename, 'application/json');
       if (format === 'csv') {
         const headers = ['session_id', 'id', 'sender', 'text', 'server_received_ms', 'client_message_id'];
@@ -191,7 +206,7 @@
         SLP.download('\uFEFF' + headers.join(',') + '\r\n' + rows.join('\r\n'), filename, 'text/csv;charset=utf-8');
       }
       if (format === 'txt') {
-        const lines = ['SLP ' + code, 'Development test; draft events are not included.'];
+        const lines = ['SLP ' + code, 'Sent chat messages only. Use full JSON, event CSV or draft timeline for production data.'];
         for (const session of data.sessions) {
           lines.push('', '=== ' + session.id + ' | ' + session.condition + ' | ' + session.status + ' ===');
           for (const message of data.messages.filter(m => m.session_id === session.id)) lines.push(new Date(message.server_received_ms).toISOString() + ' ' + message.sender + ': ' + message.text);
@@ -202,6 +217,12 @@
     } catch (error) { if (stamp === epoch) errorAt('human-status', error); }
     finally { button.disabled = false; }
   });
+  function showRecording(recording) {
+    if(!recording?.enabled) { $('recording-summary').textContent='记录功能尚未启用，请完成数据库迁移。';return; }
+    const missing=recording.pages.reduce((sum,page)=>sum+page.missing_events,0);
+    const open=recording.pages.filter(page=>!page.closed).length;
+    $('recording-summary').textContent=recording.event_count+' 条事件 · '+recording.drafts+' 条草稿 · 已声明序列缺失 '+missing+' 条 · 未关闭页面段 '+open+' 个'+(recording.messages_without_draft?' · '+recording.messages_without_draft+' 条消息无草稿关联':'')+'。当前计数仅涵盖服务器已收到的数据。';
+  }
   function fillAiForm(config) {
     if (!config) return;
     for (const [id, key] of [['ai-model','model'],['ai-delay-k','ms_per_character'],['ai-delay-min','random_min_ms'],['ai-delay-max','random_max_ms'],['ai-output-budget','max_output_tokens'],['ai-reasoning','reasoning_effort'],['ai-base-prompt','base_prompt']]) $(id).value = config[key];

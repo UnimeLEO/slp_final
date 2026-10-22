@@ -5,16 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Conversation</title>
-  <link rel="stylesheet" href="./assets/styles.css?v=021">
-  <script src="./assets/config.js?v=021" defer></script>
-  <script src="./assets/common.js?v=021" defer></script>
-  <script src="./assets/participant.js?v=021" defer></script>
+  <link rel="stylesheet" href="./assets/styles.css?v=030">
+  <script src="./assets/config.js?v=030" defer></script>
+  <script src="./assets/common.js?v=030" defer></script>
+  <script src="./assets/logging.js?v=030" defer></script>
+  <script src="./assets/participant.js?v=030" defer></script>
 </head>
 <body data-page="participant">
 <main>
   <section class="entry-page card" id="entry-page" aria-labelledby="entry-heading">
     <h1 id="entry-heading">Conversation</h1>
     <p>Please enter the participant information provided by the researcher.</p>
+    <p class="small muted">Typing activity in the chat box, including deleted and unsent text, is recorded.</p>
     <form id="entry-form">
       <fieldset id="entry-fields">
         <label for="participant-code">Subject code</label>
@@ -61,7 +63,7 @@
             <button class="primary" id="send-message" disabled>Send</button>
           </div>
         </form>
-        <p id="chat-status" class="status-text" role="status" aria-live="polite"></p>
+        <div class="chat-feedback"><p id="chat-status" class="status-text" role="status" aria-live="polite"></p><p id="recording-status" class="status-text" role="status" aria-live="polite"></p><button id="save-local-backup" class="secondary compact" type="button" hidden>Save local backup</button></div>
       </section>
     </div>
   </section>

@@ -1,9 +1,9 @@
-// SLP v0.2.1 — Numeric participant codes; Human/AI chat with persistent jobs.
+// SLP v0.3.0 — Participant draft recording, durable event sync and Human/AI chat.
 // Bind a dedicated D1 database as DB, set ADMIN_SECRET (Secret, >=20 characters).
 // Optional ALLOWED_ORIGIN (Text) defaults to this project's GitHub Pages origin.
-const VERSION = '0.2.1';
+const VERSION = '0.3.0';
 const DEFAULT_ORIGIN = 'https://unimeleo.github.io';
-const MAX_BODY_BYTES = 64000;
+const MAX_BODY_BYTES = 524288;
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -50,7 +50,7 @@ async function ready(db) {
   if (!db) fail(503, 'D1 binding DB is missing.');
   try {
     const row = await statement(db, "SELECT value FROM schema_meta WHERE name='schema_version'").first();
-    if (row?.value !== '2') fail(503, 'Run migration 002-ai.sql (or schema.sql for a new database).');
+    if (!['2','3'].includes(row?.value)) fail(503, 'Run the SLP database migrations.');
   } catch (error) {
     if (error instanceof HttpError) throw error;
     fail(503, 'D1 schema is not ready. Run migration 002-ai.sql or the full schema.sql.');
@@ -143,10 +143,23 @@ async function sendMessage(db, session, sender, body) {
   const elapsed = body.client_elapsed_ms == null ? null : Number(body.client_elapsed_ms);
   if (elapsed !== null && (!Number.isFinite(elapsed) || elapsed < 0)) fail(400, 'Invalid elapsed time.');
   if (sender === 'interlocutor' && session.condition !== 'human') fail(409, 'This session does not accept Human replies.');
-  // The SQL status guard makes sending versus ending safe under concurrent requests.
-  await statement(db, `INSERT OR IGNORE INTO messages(session_id,sender,client_message_id,text,server_received_ms,client_elapsed_ms)
+  const now = Date.now();
+  const writes = [];
+  let draft = null;
+  if (sender === 'participant' && body.logging) {
+    await requireRecording(db);
+    const page = validatePage(body.logging.page);
+    draft = validateDraft(body.logging.draft, page.page_id);
+    if (draft.client_message_id !== clientId || draft.raw_at_send == null || draft.raw_at_send.trim() !== message || draft.text !== draft.raw_at_send) fail(400, 'Draft does not match the sent message.');
+    await checkRecordingIdentity(db, session.id, [page], [draft]);
+    writes.push(pageStatement(db, session.id, page, now), draftStatement(db, session.id, draft, now));
+  }
+  // Status guard and draft linkage share one D1 transaction.
+  writes.push(statement(db, `INSERT OR IGNORE INTO messages(session_id,sender,client_message_id,text,server_received_ms,client_elapsed_ms)
     SELECT ?,?,?,?,?,? FROM sessions WHERE id=? AND status='active'`,
-    session.id, sender, clientId, message, Date.now(), elapsed, session.id).run();
+    session.id, sender, clientId, message, now, elapsed, session.id));
+  if (draft) writes.push(resolveDraftsStatement(db, session.id));
+  await db.batch(writes);
   const row = await statement(db, 'SELECT id,sender,client_message_id,text,server_received_ms,client_elapsed_ms FROM messages WHERE session_id=? AND sender=? AND client_message_id=?', session.id, sender, clientId).first();
   if (!row) fail(409, 'The conversation is not active. Your message has not been sent.');
   if (row.text !== message) fail(409, 'This message identifier has already been used for different text.');
@@ -293,6 +306,149 @@ async function aiServiceNotice(db, sessionId) {
   return error ? 'Message delivery is delayed. Please contact the researcher.' : null;
 }
 
+// Recording is participant-authenticated and never included in interlocutor context.
+const RECORDING_VERSION = 1;
+const EVENT_TYPES = new Set(['page_start','page_resume','draft_start','draft_resume','keydown','beforeinput','input','selection','compositionstart','compositionupdate','compositionend','focus','blur','visibility','page_focus','page_blur','message_display','message_visible','send_attempt','send_ack','send_failed','programmatic_clear','draft_unsent','page_end','pagehide','resume_gap']);
+const idField = (value, label) => {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value)) fail(400, 'Invalid ' + label + '.');
+  return value;
+};
+function numberField(value, label, integer = false) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (integer && !Number.isSafeInteger(value))) fail(400, 'Invalid ' + label + '.');
+  return value;
+}
+function rawText(value, label) {
+  if (typeof value !== 'string' || value.length > 10000) fail(400, 'Invalid ' + label + '.');
+  return value;
+}
+async function recordingEnabled(db) {
+  return (await statement(db, "SELECT value FROM schema_meta WHERE name='schema_version'").first())?.value === '3';
+}
+async function requireRecording(db) {
+  if (!await recordingEnabled(db)) fail(503, 'Typing recording is not ready. Please contact the researcher.');
+}
+function validatePage(page) {
+  if (!page || typeof page !== 'object') fail(400, 'Missing recording page.');
+  return {
+    page_id: idField(page.page_id, 'page_id'),
+    time_origin_ms: numberField(page.time_origin_ms, 'time_origin_ms'),
+    started_wall_ms: numberField(page.started_wall_ms, 'started_wall_ms'),
+    declared_seq: numberField(page.declared_seq, 'declared_seq', true),
+    closed: page.closed === true
+  };
+}
+function validateDraft(draft, pageId) {
+  if (!draft || typeof draft !== 'object') fail(400, 'Invalid draft.');
+  if (!['editing','pending','sent','unsent'].includes(draft.state)) fail(400, 'Invalid draft state.');
+  return {
+    draft_id: idField(draft.draft_id, 'draft_id'),
+    client_message_id: idField(draft.client_message_id, 'client_message_id'),
+    revision: numberField(draft.revision, 'revision', true),
+    text: rawText(draft.text, 'draft text'), state: draft.state,
+    raw_at_send: draft.raw_at_send == null ? null : rawText(draft.raw_at_send, 'raw_at_send'),
+    last_page_id: idField(draft.last_page_id || pageId, 'last_page_id'),
+    last_seq: numberField(draft.last_seq, 'last_seq', true)
+  };
+}
+function pageStatement(db, sessionId, page, now) {
+  return statement(db, `INSERT INTO recording_pages(session_id,page_id,time_origin_ms,started_wall_ms,declared_seq,closed,created_ms,updated_ms)
+    VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(session_id,page_id) DO UPDATE SET
+    declared_seq=MAX(recording_pages.declared_seq,excluded.declared_seq),closed=MAX(recording_pages.closed,excluded.closed),updated_ms=excluded.updated_ms`,
+    sessionId, page.page_id, page.time_origin_ms, page.started_wall_ms, page.declared_seq, Number(page.closed), now, now);
+}
+function draftStatement(db, sessionId, draft, now) {
+  return statement(db, `INSERT INTO drafts(session_id,draft_id,client_message_id,revision,text,state,raw_at_send,last_page_id,last_seq,created_ms,updated_ms)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,draft_id) DO UPDATE SET
+    revision=excluded.revision,text=excluded.text,
+    state=CASE WHEN drafts.message_id IS NOT NULL THEN 'sent' ELSE excluded.state END,
+    raw_at_send=COALESCE(drafts.raw_at_send,excluded.raw_at_send),last_page_id=excluded.last_page_id,last_seq=excluded.last_seq,updated_ms=excluded.updated_ms
+    WHERE excluded.revision>drafts.revision AND drafts.client_message_id=excluded.client_message_id`,
+    sessionId, draft.draft_id, draft.client_message_id, draft.revision, draft.text, draft.state,
+    draft.raw_at_send, draft.last_page_id, draft.last_seq, now, now);
+}
+async function checkRecordingIdentity(db, sessionId, pages, drafts) {
+  const oldPages = (await statement(db, 'SELECT * FROM recording_pages WHERE session_id=? AND page_id IN (SELECT value FROM json_each(?))', sessionId, JSON.stringify(pages.map(p => p.page_id))).all()).results;
+  for (const old of oldPages) {
+    const incoming = pages.find(page => page.page_id === old.page_id);
+    if (old.time_origin_ms !== incoming.time_origin_ms || old.started_wall_ms !== incoming.started_wall_ms) fail(409, 'Recording page identifier conflict.');
+  }
+  if (!drafts.length) return;
+  const existing = (await statement(db, 'SELECT * FROM drafts WHERE session_id=? AND (draft_id IN (SELECT value FROM json_each(?)) OR client_message_id IN (SELECT value FROM json_each(?)))',
+    sessionId, JSON.stringify(drafts.map(d => d.draft_id)), JSON.stringify(drafts.map(d => d.client_message_id))).all()).results;
+  for (const old of existing) {
+    const incoming = drafts.find(draft => draft.draft_id === old.draft_id || draft.client_message_id === old.client_message_id);
+    if (old.draft_id !== incoming.draft_id || old.client_message_id !== incoming.client_message_id) fail(409, 'Draft identifier conflict.');
+    if (old.revision === incoming.revision && (old.text !== incoming.text || old.last_page_id !== incoming.last_page_id || old.last_seq !== incoming.last_seq)) fail(409, 'Draft revision conflict.');
+  }
+}
+function resolveDraftsStatement(db, sessionId) {
+  return statement(db, `UPDATE drafts SET message_id=(SELECT id FROM messages WHERE session_id=drafts.session_id AND sender='participant' AND client_message_id=drafts.client_message_id),
+    raw_at_send=COALESCE(raw_at_send,(SELECT json_extract(payload_json,'$.payload.raw_text') FROM interaction_events WHERE session_id=drafts.session_id AND draft_id=drafts.draft_id AND event_type='send_attempt' ORDER BY rowid LIMIT 1)),
+    state=CASE WHEN EXISTS(SELECT 1 FROM messages WHERE session_id=drafts.session_id AND sender='participant' AND client_message_id=drafts.client_message_id) THEN 'sent'
+    WHEN EXISTS(SELECT 1 FROM sessions WHERE id=drafts.session_id AND status='ended') THEN 'unsent' ELSE state END WHERE session_id=?`, sessionId);
+}
+async function ingestRecording(db, session, body) {
+  await requireRecording(db);
+  if (session.status === 'ready') fail(409, 'The conversation has not started.');
+  if (body.recording_version !== RECORDING_VERSION) fail(400, 'Unsupported recording format.');
+  const page = validatePage(body.page);
+  if (!Array.isArray(body.events) || body.events.length > 25 || !Array.isArray(body.drafts) || body.drafts.length > 25) fail(400, 'Invalid recording batch.');
+  const drafts = body.drafts.map(draft => validateDraft(draft, page.page_id));
+  if (new Set(drafts.map(d => d.draft_id)).size !== drafts.length || new Set(drafts.map(d => d.client_message_id)).size !== drafts.length) fail(400, 'Duplicate draft in batch.');
+  let previousSeq = 0;
+  const events = body.events.map(event => {
+    if (!event || !EVENT_TYPES.has(event.event_type)) fail(400, 'Invalid recording event.');
+    const seq = numberField(event.seq, 'event sequence', true);
+    if (seq <= previousSeq || seq > page.declared_seq) fail(400, 'Invalid recording sequence.');
+    previousSeq = seq;
+    const payload = event.payload;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) fail(400, 'Invalid event payload.');
+    for (const key of ['text_before','text_after','text','raw_text']) if (key in payload) rawText(payload[key], key);
+    for (const key of ['selection_before','selection_after']) if (key in payload) {
+      const range = payload[key];
+      if (!Array.isArray(range) || range.length !== 2 || range.some(v => !Number.isSafeInteger(v) || v < 0 || v > 10000) || range[0] > range[1]) fail(400, 'Invalid selection range.');
+    }
+    return { seq, draft_id: event.draft_id == null ? null : idField(event.draft_id,'draft_id'), event_type: event.event_type,
+      client_elapsed_ms: numberField(event.client_elapsed_ms,'client_elapsed_ms'), client_wall_ms: numberField(event.client_wall_ms,'client_wall_ms'), payload };
+  });
+  const referenced = [...new Set(events.map(e => e.draft_id).filter(Boolean))];
+  const known = (await statement(db, 'SELECT draft_id FROM drafts WHERE session_id=? AND draft_id IN (SELECT value FROM json_each(?))', session.id, JSON.stringify(referenced)).all()).results;
+  if (referenced.some(id => !drafts.some(d => d.draft_id === id) && !known.some(d => d.draft_id === id))) fail(400, 'Unknown draft in recording event.');
+  const displayIds = [...new Set(events.filter(e => ['message_display','message_visible'].includes(e.event_type)).map(e => e.payload.message_id))];
+  if (displayIds.some(id => !Number.isSafeInteger(id) || id < 1)) fail(400, 'Invalid displayed message.');
+  if (displayIds.length) {
+    const count = await statement(db, 'SELECT COUNT(*) AS n FROM messages WHERE session_id=? AND id IN (SELECT value FROM json_each(?))', session.id, JSON.stringify(displayIds)).first();
+    if (count.n !== displayIds.length) fail(403, 'Displayed message does not belong to this session.');
+  }
+  await checkRecordingIdentity(db, session.id, [page], drafts);
+  const encoded = JSON.stringify(events);
+  const conflict = await statement(db, `SELECT e.seq FROM interaction_events e JOIN json_each(?) j ON e.seq=json_extract(j.value,'$.seq')
+    WHERE e.session_id=? AND e.page_id=? AND e.payload_json!=json(j.value) LIMIT 1`, encoded, session.id, page.page_id).first();
+  if (conflict) fail(409, 'Recording event identifier conflict.');
+  const now = Date.now();
+  await db.batch([
+    pageStatement(db, session.id, page, now),
+    ...drafts.map(draft => draftStatement(db, session.id, draft, now)),
+    statement(db, `INSERT OR IGNORE INTO interaction_events(session_id,page_id,seq,draft_id,event_type,client_elapsed_ms,client_wall_ms,payload_json,received_ms,received_after_end)
+      SELECT ?,?,json_extract(value,'$.seq'),json_extract(value,'$.draft_id'),json_extract(value,'$.event_type'),json_extract(value,'$.client_elapsed_ms'),json_extract(value,'$.client_wall_ms'),json(value),?,
+      CASE WHEN EXISTS(SELECT 1 FROM sessions WHERE id=? AND status='ended') THEN 1 ELSE 0 END FROM json_each(?)`, session.id, page.page_id, now, session.id, encoded),
+    resolveDraftsStatement(db, session.id)
+  ]);
+  const racedConflict = await statement(db, `SELECT e.seq FROM interaction_events e JOIN json_each(?) j ON e.seq=json_extract(j.value,'$.seq')
+    WHERE e.session_id=? AND e.page_id=? AND e.payload_json!=json(j.value) LIMIT 1`, encoded, session.id, page.page_id).first();
+  if (racedConflict) fail(409, 'Recording event identifier conflict.');
+  return { accepted_sequences: events.map(event => event.seq), page_id: page.page_id, server_received_ms: now };
+}
+async function recordingSummary(db, sessionId) {
+  if (!await recordingEnabled(db)) return { enabled:false, pages:[], event_count:0, drafts:0, messages_without_draft:0 };
+  const pages = (await statement(db, `SELECT p.*,COUNT(e.seq) AS event_count,COALESCE(MAX(e.seq),0) AS received_max_seq
+    FROM recording_pages p LEFT JOIN interaction_events e ON e.session_id=p.session_id AND e.page_id=p.page_id WHERE p.session_id=? GROUP BY p.session_id,p.page_id ORDER BY p.created_ms,p.page_id`, sessionId).all()).results;
+  const drafts = await statement(db, 'SELECT COUNT(*) AS n FROM drafts WHERE session_id=?', sessionId).first();
+  const unlinked = await statement(db, "SELECT COUNT(*) AS n FROM messages m WHERE session_id=? AND sender='participant' AND NOT EXISTS(SELECT 1 FROM drafts d WHERE d.message_id=m.id)", sessionId).first();
+  return { enabled:true, pages:pages.map(page => ({...page, missing_events:Math.max(0,page.declared_seq-page.event_count), acknowledged_tail_complete:page.closed===1 && page.event_count===page.declared_seq })),
+    event_count:pages.reduce((n,page)=>n+page.event_count,0),drafts:drafts.n,messages_without_draft:unlinked.n };
+}
+
 async function api(request, env, body) {
   const db = env.DB;
   const action = typeof body.action === 'string' ? body.action : '';
@@ -302,7 +458,7 @@ async function api(request, env, body) {
     if (action === 'admin_state') {
       const result = await statement(db, 'SELECT id,participant_code,task_number,condition,scenario_code,status,created_ms,started_ms,ended_ms,end_reason FROM sessions ORDER BY created_ms DESC,participant_code,task_number').all();
       const config = await aiConfig(db, env);
-      return { sessions: result.results, version: VERSION, ai_enabled: aiConfigured(env, config), ai_config: config, api_key_configured: Boolean(env.OPENAI_API_KEY) };
+      return { recording_enabled: await recordingEnabled(db), sessions: result.results, version: VERSION, ai_enabled: aiConfigured(env, config), ai_config: config, api_key_configured: Boolean(env.OPENAI_API_KEY) };
     }
     if (action === 'admin_save_ai') {
       const config = validateAiConfig(body.config || {}, env.OPENAI_MODEL);
@@ -310,6 +466,16 @@ async function api(request, env, body) {
       return { ai_config: config, ai_enabled: aiConfigured(env, config), api_key_configured: Boolean(env.OPENAI_API_KEY) };
     }
     if (action === 'admin_create') return createParticipant(db, body);
+    if (action === 'admin_recording_export') {
+      await requireRecording(db);
+      const code = codeField(body.participant_code);
+      const cursor = numberField(body.after_event_row ?? 0, 'event cursor', true);
+      const upper = numberField(body.through_event_row ?? Number.MAX_SAFE_INTEGER, 'event upper bound', true);
+      const rows = (await statement(db, `SELECT e.rowid AS event_row,e.* FROM interaction_events e JOIN sessions s ON s.id=e.session_id
+        WHERE s.participant_code=? AND e.rowid>? AND e.rowid<=? ORDER BY e.rowid LIMIT 101`, code,cursor,upper).all()).results;
+      const events = rows.slice(0,100).map(({payload_json,...event}) => ({...event,...JSON.parse(payload_json)}));
+      return { events, next_cursor: events.at(-1)?.event_row ?? cursor, has_more: rows.length>100 };
+    }
     if (action === 'admin_export') {
       const code = codeField(body.participant_code);
       const sessions = (await statement(db, 'SELECT * FROM sessions WHERE participant_code=? ORDER BY task_number', code).all()).results;
@@ -317,12 +483,21 @@ async function api(request, env, body) {
       const messages = (await statement(db, 'SELECT m.* FROM messages m JOIN sessions s ON s.id=m.session_id WHERE s.participant_code=? ORDER BY m.id', code).all()).results;
       const ai_jobs = (await statement(db, 'SELECT j.* FROM ai_jobs j JOIN sessions s ON s.id=j.session_id WHERE s.participant_code=? ORDER BY j.trigger_message_id', code).all()).results;
       const ai_configs = (await statement(db, 'SELECT c.* FROM ai_session_configs c JOIN sessions s ON s.id=c.session_id WHERE s.participant_code=?', code).all()).results;
-      return { format_version: 2, platform_version: VERSION, exported_ms: Date.now(), participant_code: code, sessions, messages, ai_jobs, ai_configs, draft_events_implemented: false };
+      let recording = { enabled:false, pages:[], drafts:[], summaries:[] };
+      if (await recordingEnabled(db)) {
+        const pages = (await statement(db,'SELECT p.* FROM recording_pages p JOIN sessions s ON s.id=p.session_id WHERE s.participant_code=? ORDER BY p.created_ms,p.page_id',code).all()).results;
+        const drafts = (await statement(db,'SELECT d.* FROM drafts d JOIN sessions s ON s.id=d.session_id WHERE s.participant_code=? ORDER BY d.created_ms,d.draft_id',code).all()).results;
+        const summaries = [];
+        for (const session of sessions) summaries.push({session_id:session.id,...await recordingSummary(db,session.id)});
+        const upper = await statement(db,'SELECT COALESCE(MAX(e.rowid),0) AS n FROM interaction_events e JOIN sessions s ON s.id=e.session_id WHERE s.participant_code=?',code).first();
+        recording = {enabled:true,pages,drafts,summaries,events_upper_row:upper.n,exported_while_active:sessions.some(session=>session.status==='active')};
+      }
+      return { format_version: 3, platform_version: VERSION, exported_ms: Date.now(), participant_code: code, sessions, messages, ai_jobs, ai_configs, draft_events_implemented: recording.enabled, recording };
     }
     const session = await findSession(db, body.session_id);
     if (action === 'admin_session') {
       const ai_jobs = (await statement(db, 'SELECT id,state,trigger_message_id,error_code,attempt,generation_started_ms,generation_completed_ms,ready_after_ms,delivered_ms FROM ai_jobs WHERE session_id=? ORDER BY trigger_message_id', session.id).all()).results;
-      return { session, messages: await readMessages(db, session.id, body.after_id ?? 0, true), ai_jobs };
+      return { session, messages: await readMessages(db, session.id, body.after_id ?? 0, true), ai_jobs, recording:await recordingSummary(db,session.id) };
     }
     if (action === 'admin_retry_ai') {
       if (session.condition !== 'ai' || session.status !== 'active') fail(409, 'No active AI session selected.');
@@ -337,9 +512,10 @@ async function api(request, env, body) {
   const code = await participantAuth(db, body);
   if (action === 'participant_join') {
     const session = await nextSession(db, code);
-    return { participant_code: code, session: publicSession(session), complete: !session };
+    return { participant_code: code, session: publicSession(session), complete: !session, recording_enabled:await recordingEnabled(db), recording_version:RECORDING_VERSION };
   }
   const session = await ownedSession(db, code, body.session_id);
+  if (action === 'participant_events') return ingestRecording(db,session,body);
   if (action === 'participant_session') {
     await processAi(db, session, env);
     return { session: publicSession(await findSession(db, session.id)), messages: await readMessages(db, session.id, body.after_id ?? 0), service_notice: await aiServiceNotice(db, session.id) };
@@ -389,7 +565,7 @@ export default {
       if (request.method === 'GET' && (path === '/health' || path === '/')) {
         await ready(env.DB);
         const config = await aiConfig(env.DB, env);
-        return respond({ ok: true, service: 'slp-final', version: VERSION, database: 'ready', ai_enabled: aiConfigured(env, config) });
+        return respond({ ok: true, service: 'slp-final', version: VERSION, database: 'ready', recording_enabled:await recordingEnabled(env.DB), ai_enabled: aiConfigured(env, config) });
       }
       if (path !== '/api' || request.method !== 'POST') fail(404, 'Endpoint not found.');
       if (!(request.headers.get('Content-Type') || '').includes('application/json')) fail(415, 'Use application/json.');
@@ -411,6 +587,8 @@ export default {
       try { body = JSON.parse(new TextDecoder().decode(bytes)); }
       catch (_) { fail(400, 'Invalid JSON.'); }
       if (!body || typeof body !== 'object' || Array.isArray(body)) fail(400, 'A JSON object is required.');
+      const limit = body.action === 'participant_events' || (body.action === 'participant_send' && body.logging) ? 262144 : 64000;
+      if (length > limit) fail(413, 'Request body too large.');
       return respond({ ok: true, ...await api(request, env, body) });
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;

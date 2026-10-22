@@ -85,7 +85,10 @@ fieldset > button { margin-top: 24px; }
 #message-form { padding: 16px 20px 0; border-top: 1px solid #ddd; }
 #message-draft { display: block; height: 100px; min-height: 70px; max-height: 24dvh; }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
-.chat-card > .status-text { margin: 8px 20px 10px; }
+.chat-feedback { padding: 0 20px 10px; }
+.chat-feedback .status-text { margin: 6px 0 0; min-height: 0; }
+.chat-feedback .status-text:empty { display: none; }
+#save-local-backup { margin-top: 8px; }
 .completion { max-width: 750px; margin: 50px auto; padding: 35px; }
 .completion h1 { font-size: 28px; }
 

@@ -45,7 +45,7 @@ window.SLP = (() => {
     document.body.append(anchor); anchor.click(); anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
-  function chatView(element, ownRole, { otherLabel, showSeconds = true } = {}) {
+  function chatView(element, ownRole, { otherLabel, showSeconds = true, onAppend } = {}) {
     let cursor = 0;
     const seen = new Set();
     return {
@@ -53,6 +53,7 @@ window.SLP = (() => {
       reset() { cursor = 0; seen.clear(); element.replaceChildren(); },
       append(rows) {
         const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 90;
+        const appended = [];
         for (const row of [...rows].sort((a, b) => a.id - b.id)) {
           if (seen.has(row.id)) continue;
           if (!seen.size) element.replaceChildren();
@@ -65,9 +66,10 @@ window.SLP = (() => {
           const time = document.createElement('time');
           time.dateTime = new Date(row.server_received_ms).toISOString();
           time.textContent = new Date(row.server_received_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false, ...(showSeconds ? { second: '2-digit' } : {}) });
-          item.append(label, content, time); element.append(item);
+          item.append(label, content, time); element.append(item); appended.push([row,item]);
         }
         if (nearBottom) element.scrollTop = element.scrollHeight;
+        for (const [row,item] of appended) onAppend?.(row,item);
       }
     };
   }

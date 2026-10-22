@@ -1,22 +1,23 @@
-# Cloudflare 控制台部署：slp-final-admin（0.2.1）
+# Cloudflare 控制台部署：slp-final-admin（0.3.0）
 
-## 已部署 0.2.0：升级到 0.2.1
+## 已部署 0.2.x：升级到 0.3.0
 
-1. 用仓库 `worker/worker.mjs` 的完整内容替换现有 Worker 入口代码，然后点击 Deploy。
-2. 不执行 SQL，不重设 `DB`、`ADMIN_SECRET`、`OPENAI_API_KEY` 或模型配置。现有数据与配置保留。
-3. 打开 `/health`，确认 `version` 为 `0.2.1`。
-4. GitHub Pages 更新后强制刷新工作台，即可创建 `01` 等数字编号；旧编号仍可登录。
-5. 从创建结果中点击“复制访问码”，参与者可以将整串粘贴到任一 Access code 分段框中。
+1. **先**用仓库 `worker/worker.mjs` 全文替换现有 Worker 入口并 Deploy。新版可同时识别 schema 2 和 3。
+2. **再**到现有 SLP 专用 D1 Console 执行 `migrations/003-recording.sql` 的全文。只加记录表和索引，不删参与者、消息或 AI 配置。
+3. 不更改 `DB`、`ADMIN_SECRET`、`OPENAI_API_KEY` 或模型参数，也不执行旧迁移 002。
+4. `/health` 应返回 `version: "0.3.0"`、`recording_enabled: true`、`database: "ready"`。
+5. GitHub Pages 更新后强制刷新两端；新建一个未使用的编号测试记录。旧聊天没有历史击键数据，无法补录。
+6. 任务结束后从工作台导出完整 JSON、事件 CSV 和草稿时间线，检查 Participant 记录状态。实际输入法和断网测试见 [RECORDING.md](../RECORDING.md)。
 
-纯数字编号需要新版 Worker 的校验支持，仅刷新前端不足以启用。
+记录未就绪时，新版参与者页面会阻止进入，避免静默收集无草稿记录的测试；不需要新增任何密钥或绑定。
 
 ## 已部署 0.1.0：增量升级
 
-1. 在现有 **SLP 专用数据库** Console 执行 `migrations/002-ai.sql`。该脚本只增加表与索引、更新版本标记，不删除 TEST01 或现有聊天。
+1. 在现有 **SLP 专用数据库** Console 执行 `migrations/002-ai.sql`。该脚本只增加表与索引、更新版本标记，不删除 TEST01 或现有聊天。随后再执行 `migrations/003-recording.sql`。
 2. 给现有 Worker 增加 Secret `OPENAI_API_KEY`，值为你的 OpenAI API 密钥。原有 `ADMIN_SECRET` 与 `DB` 绑定保留。
 3. 模型名称可在新版工作台“AI 配置”填写；也可以先增加 Text 变量 `OPENAI_MODEL` 作为默认值。
 4. 将新版 `worker.mjs` 全部粘贴到现有 Worker，点击 Deploy。迁移后尽快部署新代码，因为旧版只识别 schema version 1。
-5. 刷新研究者工作台至 **0.2.1**，重新登录并配置模型。reasoning effort 默认不指定；如填写，必须为该模型支持的值。
+5. 刷新研究者工作台至 **0.3.0**，重新登录并配置模型。reasoning effort 默认不指定；如填写，必须为该模型支持的值。
 6. 新建 `TEST02`，选顺序 2（AI A → Human B），用参与者页面验证 AI。也可以继续尚未结束的 TEST01-T2。
 
 `ai_enabled` 只表示密钥和模型名称已配置，不代表已通过账户权限、配额和模型调用测试。
@@ -27,7 +28,7 @@ Cloudflare → Storage & databases → D1 SQL database → Create database。
 
 建议命名：`slp-final`。请创建独立数据库，不使用 Minor Thesis 的数据库。
 
-打开数据库的 Console，将同目录 `schema.sql` 的全部内容粘贴执行。脚本创建 `schema_meta`、`participants`、`sessions`、`messages` 四个表与索引，不删除现有记录。
+打开数据库的 Console，将同目录 `schema.sql` 的全部内容粘贴执行。脚本创建聊天、AI 和草稿记录所需表与索引，不删除现有记录。
 
 ## 2. 绑定已有 Worker
 
@@ -73,7 +74,7 @@ https://你的实际Worker域名/health
 数据库、密钥与模型名称均已配置时返回：
 
 ```json
-{"ok":true,"service":"slp-final","version":"0.2.1","database":"ready","ai_enabled":true}
+{"ok":true,"service":"slp-final","version":"0.3.0","recording_enabled":true,"database":"ready","ai_enabled":true}
 ```
 
 | 返回结果 | 检查 |
@@ -88,7 +89,7 @@ https://你的实际Worker域名/health
 
 ## 6. 两端聊天测试
 
-1. 等待 GitHub Pages 更新至 0.2.1。刷新工作台，页头应显示“开发版 0.2.1”。
+1. 等待 GitHub Pages 更新至 0.3.0。刷新工作台，页头应显示“开发版 0.3.0”。
 2. 输入实际 Worker 地址、研究者口令，点击“连接并解锁”。
 3. 创建 `TEST01`，保持顺序 1：Human A → AI B。先保存新访问码。
 4. 复制工作台中的“参与者链接”，在另一台电脑或另一浏览器打开。链接包含非敏感服务器地址，不含口令或访问码。
@@ -105,11 +106,11 @@ https://你的实际Worker域名/health
 
 ## 已知边界
 
-- 0.2.0 包括 AI，尚无草稿记录与正式问卷。
+- 0.3.0 包括 Participant 草稿记录，正式知情同意与问卷仍待接入。
 - 消息通过轮询传递，前台约 1.5 秒一次，隐藏页约 5 秒一次；两种角色使用同一个服务。
 - 每次读取最多 500 条新消息，后续轮询继续读取，避免单次返回无限增长。
-- 参与者刷新后需重新输入编号与访问码，服务端恢复当前任务和已发送消息；尚未发送的草稿不能恢复。
-- 后续完整记录阶段会增加参与者实际显示时间、草稿与消息的关联和完整性检查。
+- 参与者刷新后需重新输入编号与访问码，服务端恢复当前任务和已发送消息；草稿与待确认发送可通过 IndexedDB 恢复；本机站点数据被清除或未提交时不保证恢复。
+- 客户端记录 DOM/可见区域观察、草稿与消息关联；这些时间不是已阅读的证明，完整性结果也不能保证崩溃前没有丢失尾部。
 
 ## AI 连接错误
 
