@@ -1,7 +1,7 @@
-// SLP v0.2.0 — Human/AI chat with persistent response jobs. No dependencies.
+// SLP v0.2.1 — Numeric participant codes; Human/AI chat with persistent jobs.
 // Bind a dedicated D1 database as DB, set ADMIN_SECRET (Secret, >=20 characters).
 // Optional ALLOWED_ORIGIN (Text) defaults to this project's GitHub Pages origin.
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const DEFAULT_ORIGIN = 'https://unimeleo.github.io';
 const MAX_BODY_BYTES = 64000;
 
@@ -42,7 +42,7 @@ function textField(value, label, limit = 6000) {
 }
 function codeField(value) {
   const code = typeof value === 'string' ? value.trim().toUpperCase() : '';
-  if (!/^[A-Z][A-Z0-9_-]{1,19}$/.test(code)) fail(400, 'Invalid participant code.');
+  if (!/^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(code)) fail(400, 'Invalid participant code. Use 2–20 letters, numbers, underscores or hyphens, starting with a letter or number.');
   return code;
 }
 

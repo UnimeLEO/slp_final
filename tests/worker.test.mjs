@@ -82,6 +82,28 @@ test('participant access, hidden identity, owned session isolation', async () =>
   assert.equal((await request({ action: 'participant_join', participant_code: 'TEST01', access_code: 'wrong' })).response.status, 401);
   assert.equal((await first.participant({ action: 'participant_session', session_id: 'TEST02-T1' })).response.status, 403);
 });
+test('numeric codes retain leading zeros through creation, login, chat, export and ending', async () => {
+  const { create, request } = setup();
+  const { participant, admin } = await create('01');
+  const other = await create('02');
+  await create('TEST01'); // Existing alphanumeric codes remain valid.
+  const joined = await participant({ action: 'participant_join' });
+  assert.equal(joined.data.participant_code, '01');
+  assert.equal(joined.data.session.id, '01-T1');
+  assert.equal((await other.participant({ action: 'participant_session', session_id: '01-T1' })).response.status, 403);
+  await participant({ action: 'participant_start', session_id: '01-T1' });
+  await participant({ action: 'participant_send', session_id: '01-T1', client_message_id: 'numeric-chat', text: 'Hi!' });
+  await admin({ action: 'admin_send', session_id: '01-T1', client_message_id: 'reply', text: 'Hello!' });
+  const exported = await admin({ action: 'admin_export', participant_code: '01' });
+  assert.equal(exported.data.participant_code, '01');
+  assert.deepEqual(exported.data.sessions.map(session => session.id), ['01-T1', '01-T2']);
+  assert.equal(exported.data.messages.length, 2);
+  assert.equal((await participant({ action: 'participant_end', session_id: '01-T1' })).data.session.status, 'ended');
+  assert.equal((await participant({ action: 'participant_join' })).data.session.id, '01-T2');
+  for (const code of ['1', '-01', '_01', '0 1', '<01>']) {
+    assert.equal((await request({ action: 'participant_join', participant_code: code, access_code: 'wrong' })).response.status, 400);
+  }
+});
 test('four orders are persisted correctly and creation is atomic', async () => {
   const { create, request, env } = setup();
   const expected = [['humanA', 'aiB'], ['aiA', 'humanB'], ['humanB', 'aiA'], ['aiB', 'humanA']];

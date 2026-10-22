@@ -45,7 +45,7 @@ window.SLP = (() => {
     document.body.append(anchor); anchor.click(); anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
-  function chatView(element, ownRole) {
+  function chatView(element, ownRole, { otherLabel, showSeconds = true } = {}) {
     let cursor = 0;
     const seen = new Set();
     return {
@@ -60,11 +60,11 @@ window.SLP = (() => {
           const item = document.createElement('div');
           item.className = 'chat-message ' + (row.sender === ownRole ? 'own' : 'other');
           const label = document.createElement('div'); label.className = 'message-label';
-          label.textContent = row.sender === ownRole ? 'You' : (ownRole === 'participant' ? 'Interlocutor X' : 'Participant');
+          label.textContent = row.sender === ownRole ? 'You' : (otherLabel || (ownRole === 'participant' ? 'Interlocutor X' : 'Participant'));
           const content = document.createElement('div'); content.className = 'message-text'; content.textContent = row.text;
           const time = document.createElement('time');
           time.dateTime = new Date(row.server_received_ms).toISOString();
-          time.textContent = new Date(row.server_received_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          time.textContent = new Date(row.server_received_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false, ...(showSeconds ? { second: '2-digit' } : {}) });
           item.append(label, content, time); element.append(item);
         }
         if (nearBottom) element.scrollTop = element.scrollHeight;

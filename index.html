@@ -1,24 +1,75 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow">
-<title>Negotiation Task</title><link rel="stylesheet" href="./assets/styles.css?v=020">
-<script src="./assets/config.js?v=020" defer></script><script src="./assets/common.js?v=020" defer></script><script src="./assets/participant.js?v=020" defer></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Conversation</title>
+  <link rel="stylesheet" href="./assets/styles.css?v=021">
+  <script src="./assets/config.js?v=021" defer></script>
+  <script src="./assets/common.js?v=021" defer></script>
+  <script src="./assets/participant.js?v=021" defer></script>
 </head>
 <body data-page="participant">
-<header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">N</span><span>Negotiation Task</span></div><span class="quiet">Text interaction study</span></header>
 <main>
-<div class="entry-layout" id="entry-page">
-<section class="entry-intro"><p class="eyebrow">WELCOME</p><h1>A conversation.<br>A shared solution.</h1><p class="lead">Discuss a situation with another interlocutor and try to reach an agreement.</p><ol class="steps"><li><span>01</span><div><strong>Read your situation</strong><p>Your instructions remain available during the conversation.</p></div></li><li><span>02</span><div><strong>Have a conversation</strong><p>Explain your needs and discuss alternatives.</p></div></li><li><span>03</span><div><strong>Finish when you are ready</strong><p>Use End conversation when you wish to stop.</p></div></li></ol></section>
-<section class="card entry-card"><p class="eyebrow">STUDY ENTRY</p><h2>Join your session</h2><div class="notice"><strong>Development test</strong><p>Sent messages will be saved for testing. Draft logging and the post-task questionnaire are not enabled in this version. This is not the formal study.</p></div>
-<form id="entry-form"><fieldset id="entry-fields"><label for="participant-code">Participant code</label><input id="participant-code" name="participant_code" placeholder="e.g. TEST01" autocomplete="off" required maxlength="20"><label for="access-code">Access code</label><input id="access-code" name="access_code" placeholder="XXXX-XXXX-XXXX" autocomplete="off" required maxlength="64"><button class="primary wide" id="join-button">Continue →</button></fieldset></form><p id="entry-status" class="status-text" role="status" aria-live="polite"></p></section>
-</div>
-<div id="conversation-page" class="workspace" hidden>
-<div class="page-heading"><div><p class="eyebrow">NEGOTIATION TASK</p><h1 id="task-heading">Your conversation</h1><p id="task-label" class="muted"></p></div><span class="badge" id="session-status">Ready</span></div>
-<div class="chat-layout">
-<aside class="card task-aside"><h2>Your situation</h2><p id="task-prompt" class="preserve-lines"></p><div class="notice small">Development test · Sent messages are saved. Draft logging is not enabled.</div><button class="primary wide" id="start-task">Start conversation</button><button class="secondary wide" id="end-task" hidden>End conversation</button><button class="primary wide" id="next-task" hidden>Continue</button></aside>
-<section class="card chat-card"><div class="section-heading"><h2>Interlocutor X</h2><span class="badge">Conversation</span></div><div id="messages" class="messages" role="log" aria-live="polite" aria-label="Conversation messages"><p class="empty-message">Your conversation will appear here.</p></div><form id="message-form"><label for="message-draft" class="visually-hidden">Write a message</label><textarea id="message-draft" rows="3" placeholder="Write a message…" disabled maxlength="10000"></textarea><div class="composer-bar"><span class="small muted">Enter to send · Shift + Enter for a new line</span><button class="primary" id="send-message" disabled>Send</button></div></form><p id="chat-status" class="status-text" role="status" aria-live="polite"></p></section>
-</div></div>
-<div id="complete-page" class="card completion" hidden><p class="eyebrow">COMPLETE</p><h1>Thank you.</h1><p>Both conversations have ended. Please contact the researcher for the next step.</p><p class="small muted">Development version: the post-task questionnaire will be added later.</p></div>
-</main><footer class="footer"><span>Negotiation Task</span><span>SLP · Development 0.2.0</span></footer>
-</body></html>
+  <section class="entry-page card" id="entry-page" aria-labelledby="entry-heading">
+    <h1 id="entry-heading">Conversation</h1>
+    <p>Please enter the participant information provided by the researcher.</p>
+    <form id="entry-form">
+      <fieldset id="entry-fields">
+        <label for="participant-code">Subject code</label>
+        <input id="participant-code" name="participant_code" class="subject-code" placeholder="e.g. 01" inputmode="numeric" autocomplete="off" autocapitalize="characters" spellcheck="false" required minlength="2" maxlength="20" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{1,19}">
+        <p class="field-help">Enter your subject code, including any leading zero.</p>
+        <label for="access-code-1">Access code</label>
+        <div class="access-code-fields" role="group" aria-label="Access code">
+          <input id="access-code-1" name="access_code_1" aria-label="Access code, first group" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="4" pattern="[A-Za-z0-9]{4}">
+          <span aria-hidden="true">–</span>
+          <input id="access-code-2" name="access_code_2" aria-label="Access code, second group" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="4" pattern="[A-Za-z0-9]{4}">
+          <span aria-hidden="true">–</span>
+          <input id="access-code-3" name="access_code_3" aria-label="Access code, third group" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="4" pattern="[A-Za-z0-9]{4}">
+        </div>
+        <p class="field-help">Enter or paste the access code provided by the researcher.</p>
+        <button class="primary entry-continue" id="join-button" disabled>Continue</button>
+      </fieldset>
+    </form>
+    <p id="entry-status" class="status-text" role="status" aria-live="polite"></p>
+  </section>
+
+  <section id="conversation-page" class="workspace participant-workspace" aria-labelledby="task-heading" hidden>
+    <div class="page-heading task-heading">
+      <h1 id="task-heading">Task 1/2</h1>
+      <span id="session-status" class="quiet">Ready</span>
+    </div>
+    <div class="chat-layout participant-chat-layout">
+      <aside class="card task-aside">
+        <h2>Your situation</h2>
+        <p id="task-prompt" class="preserve-lines"></p>
+        <div class="task-actions">
+          <button class="primary wide" id="start-task">Start conversation</button>
+          <button class="secondary wide" id="end-task" hidden>End conversation</button>
+          <button class="primary wide" id="next-task" hidden>Continue</button>
+        </div>
+      </aside>
+      <section class="card chat-card" aria-labelledby="interlocutor-name">
+        <header class="chat-header"><h2 id="interlocutor-name">Jimmy</h2></header>
+        <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Conversation messages"></div>
+        <form id="message-form">
+          <label for="message-draft" class="visually-hidden">Write a message</label>
+          <textarea id="message-draft" rows="3" placeholder="Write a message…" disabled maxlength="10000"></textarea>
+          <div class="composer-bar">
+            <span class="small muted">Enter to send · Shift + Enter for a new line</span>
+            <button class="primary" id="send-message" disabled>Send</button>
+          </div>
+        </form>
+        <p id="chat-status" class="status-text" role="status" aria-live="polite"></p>
+      </section>
+    </div>
+  </section>
+
+  <section id="complete-page" class="card completion" hidden>
+    <h1>Thank you.</h1>
+    <p>Both conversations have ended. Please contact the researcher for the next step.</p>
+  </section>
+</main>
+</body>
+</html>

@@ -11,7 +11,7 @@
   function lock() {
     epoch++; selectVersion++; aiLoaded = false; clearTimeout(timer); secret = ''; selected = null; pending = null; sending = false;
     view.reset(); $('human-draft').value = ''; $('human-draft').readOnly = false;
-    $('created-credentials').textContent = ''; $('credentials-receipt').hidden = true;
+    $('created-participant').value = ''; $('created-access-code').value = ''; $('credentials-receipt').hidden = true;
     $('session-rows').replaceChildren(); $('human-role').textContent = ''; $('human-participant-prompt').textContent = '';
     $('admin-workspace').hidden = true; $('human-panel').hidden = true;
     $('login-panel').hidden = false; $('logout').hidden = true;
@@ -35,7 +35,7 @@
     const fragment = document.createDocumentFragment();
     if (!data.sessions.length) {
       const tr = document.createElement('tr'), td = document.createElement('td');
-      td.colSpan = 5; td.textContent = '暂无会话。先创建 TEST01。'; tr.append(td); fragment.append(tr);
+      td.colSpan = 5; td.textContent = '暂无会话。请先创建参与者，例如 01。'; tr.append(td); fragment.append(tr);
     }
     for (const session of data.sessions) {
       const tr = document.createElement('tr');
@@ -111,6 +111,19 @@
     try { await navigator.clipboard.writeText($('participant-link').value); status('admin-status', '参与者链接已复制。'); }
     catch (_) { $('participant-link').select(); status('admin-status', '请手动复制选中的参与者链接。'); }
   });
+  $('copy-access-code').addEventListener('click', async () => {
+    const field = $('created-access-code');
+    const stamp = epoch, value = field.value;
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      if (stamp === epoch && secret) status('admin-status', '访问码已复制。');
+    } catch (_) {
+      if (stamp !== epoch || !secret) return;
+      field.focus(); field.select();
+      status('admin-status', '请手动复制选中的访问码。');
+    }
+  });
   $('refresh-sessions').addEventListener('click', () => refreshList().catch(error => errorAt('admin-status', error)));
   $('create-form').addEventListener('submit', async event => {
     event.preventDefault(); const stamp = epoch;
@@ -123,7 +136,8 @@
       };
       const data = await call({ action: 'admin_create', participant_code: $('new-code').value, order_index: Number($('task-order').value), scenarios });
       if (stamp !== epoch || !secret) return;
-      $('created-credentials').textContent = 'Participant: ' + data.participant_code + '\nAccess code: ' + data.access_code;
+      $('created-participant').value = data.participant_code;
+      $('created-access-code').value = data.access_code;
       $('credentials-receipt').hidden = false;
       status('admin-status', '两任务已创建。请保存新访问码，再进行测试。');
       await refreshList();
