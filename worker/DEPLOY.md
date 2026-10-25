@@ -1,11 +1,11 @@
-# Cloudflare 控制台部署：slp-final-admin（1.0.1）
+# Cloudflare 控制台部署：slp-final-admin（1.0.2）
 
-## 当前升级：1.0.0 → 1.0.1
+## 当前升级：1.0.1 → 1.0.2
 
 1. 用仓库 `worker/worker.mjs` 全文替换现有 Worker 入口并 Deploy。
 2. 不执行 SQL，不更改 `DB`、`ADMIN_SECRET`、`OPENAI_API_KEY` 或模型参数。
-3. `/health` 应返回 `version: "1.0.1"`、`recording_enabled: true`、`database: "ready"`。
-4. GitHub Pages 更新后强制刷新两端；工作台页头应显示“正式版 1.0.1”。
+3. `/health` 应返回 `version: "1.0.2"`、`recording_enabled: true`、`database: "ready"`。
+4. GitHub Pages 更新后强制刷新两端；工作台页头应显示“正式版 1.0.2”。
 5. 用一个新编号完成冒烟测试，确认消息、任务结束和ZIP下载正常。
 6. 正式账号必须在升级后创建；旧会话会保留创建时的旧材料快照。
 
@@ -72,7 +72,7 @@ https://你的实际Worker域名/health
 数据库、密钥与模型名称均已配置时返回：
 
 ```json
-{"ok":true,"service":"slp-final","version":"1.0.1","recording_enabled":true,"database":"ready","ai_enabled":true}
+{"ok":true,"service":"slp-final","version":"1.0.2","recording_enabled":true,"database":"ready","ai_enabled":true}
 ```
 
 | 返回结果 | 检查 |
@@ -87,7 +87,7 @@ https://你的实际Worker域名/health
 
 ## 6. 正式版冒烟测试
 
-1. 等待 GitHub Pages 更新至 1.0.1。刷新工作台，页头应显示“正式版 1.0.1”。
+1. 等待 GitHub Pages 更新至 1.0.2。刷新工作台，页头应显示“正式版 1.0.2”。
 2. 输入实际 Worker 地址、研究者口令，点击“连接并解锁”。
 3. 创建一个未使用的测试编号，保持顺序 1：Human A → AI B。先保存新访问码。
 4. 复制工作台中的“参与者链接”，在另一台电脑或另一浏览器打开。链接包含非敏感服务器地址，不含口令或访问码。
@@ -140,3 +140,7 @@ Scenario A is the Sydney trip and make-up examination task. Scenario B is the fu
 ## 1.0.1: request-sequence constraint
 
 Both Jimmy prompts now require the interlocutor to wait for Robin to make a specific request, avoid proposing solutions on Robin's behalf beforehand, and state existing concerns before exploring compromises. Deploy the Worker and hard-refresh both interfaces; no SQL migration is required.
+
+## 1.0.2: participant-led solutions
+
+Both Jimmy prompts now prohibit proactive solutions, compromises, and alternatives. Jimmy states concerns and relevant constraints, responds to Robin's proposals, and may accept a reasonable proposal. Deploy the Worker and hard-refresh both interfaces; no SQL migration is required.

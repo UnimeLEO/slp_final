@@ -69,9 +69,10 @@ test('four formal-task orders are persisted correctly and creation is atomic', a
   for (let i = 0; i < 4; i++) assert.deepEqual(rows.filter(s => s.participant_code === 'P0' + (i + 1)).sort((a, b) => a.task_number - b.task_number).map(s => s.condition + s.scenario_code), expected[i]);
   const formal = (await request({ action: 'admin_state' }, { admin: true })).data.scenarios;
   for (const code of ['A', 'B']) {
-    assert.match(formal[code].interlocutor, /If Robin describes a problem but has not yet made a specific request/);
-    assert.match(formal[code].interlocutor, /Do not propose solutions or alternative arrangements on Robin's behalf at this stage/);
-    assert.match(formal[code].interlocutor, /express your existing concerns before exploring possible compromises/);
+    assert.doesNotMatch(formal[code].interlocutor, /If Robin describes a problem but has not yet made a specific request/);
+    assert.match(formal[code].interlocutor, /Do not proactively suggest solutions, compromises, or alternative arrangements/);
+    assert.match(formal[code].interlocutor, /Let Robin take the initiative in developing possible solutions/);
+    assert.match(formal[code].interlocutor, /You may accept a reasonable proposal when appropriate/);
   }
   const duplicate = await request({ action: 'admin_create', participant_code: 'P01', order_index: 0 }, { admin: true });
   assert.equal(duplicate.response.status, 409);
