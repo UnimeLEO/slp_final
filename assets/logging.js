@@ -94,8 +94,10 @@
       } else this.newDraft();
       this.bind();
       await this.persist();
-      this.timer=this.win.setInterval(()=>{ if(this.now()>=(this.retryAfter || 0)) void this.flush().catch(()=>{}); },1000);
-      void this.flush().catch(()=>{});
+      // Keystrokes stay in IndexedDB while the task is active. Uploading every
+      // second created a large number of small D1 transactions without adding
+      // useful experimental information. stop() and recovery upload the durable
+      // outbox in a few byte-bounded batches.
       return this;
     }
     save(event) {
@@ -103,7 +105,7 @@
       delete record.persisted;
       this.writes=this.writes.then(async()=>{
         if (this.failure) return;
-        try { await this.store.put(state,[record]); event.persisted=true;if(this.closed) void this.flush().catch(()=>{}); }
+        try { await this.store.put(state,[record]); event.persisted=true; }
         catch(error) {
           this.failure=error;
           this.onStatus('Typing data could not be saved on this device. Save a local backup and contact the researcher.',true);
@@ -183,16 +185,13 @@
         if (!allowed()) return;
         this.emit('visibility',{state:this.doc.visibilityState});
         if (!this.doc.hidden) this.refreshVisible('page_became_visible');
-        void this.flush().catch(()=>{});
       });
       for(const type of ['focus','blur']) this.listen(this.win,type,()=>{ if (allowed()) this.emit('page_'+type,{}); });
-      this.listen(this.win,'online',()=>{ void this.flush().catch(()=>{}); });
       if (this.messageContainer) this.listen(this.messageContainer,'scroll',()=>this.refreshVisible('chat_scroll'));
       this.listen(this.win,'resize',()=>this.refreshVisible('viewport_resize'));
       this.listen(this.win,'scroll',()=>this.refreshVisible('page_scroll'));
       this.listen(this.win,'pagehide',event=>{
         if (allowed()) this.emit('pagehide',{persisted:!!event.persisted});
-        void this.flush().catch(()=>{}); // Best effort only; persisted outbox remains on failure.
       });
       this.listen(this.win,'pageshow',event=>{
         if (allowed() && event.persisted) this.emit('resume_gap',{reason:'back_forward_cache'});
@@ -240,7 +239,7 @@
     sendFailed(error) { this.emit('send_failed',{status:error.status || null,message:String(error.message || error).slice(0,300)}); }
     makeBatch() {
       const first=this.queue.find(event=>event.persisted);if(!first) return null;
-      const candidates=this.queue.filter(event=>event.persisted && event.page_id===first.page_id).slice(0,25);
+      const candidates=this.queue.filter(event=>event.persisted && event.page_id===first.page_id).slice(0,500);
       const selected=[];
       let body;
       for (const event of candidates) {
@@ -265,12 +264,10 @@
         const ids=new Set(batch.selected.map(event=>event.id));
         await this.store.acknowledge([...ids]);
         this.queue=this.queue.filter(event=>!ids.has(event.id));
-        this.retryAfter=0;this.syncFailures=0;
         this.onStatus('',false);
-        if(this.closed && !this.queue.length && this.timer) { this.win.clearInterval(this.timer);this.timer=null; }
       })();
       try { return await this.flushFlight; }
-      catch(error) { this.syncFailures=(this.syncFailures || 0)+1;this.retryAfter=this.now()+Math.min(60000,3000*2**Math.min(this.syncFailures,5));this.onStatus('Typing data is waiting to be saved. Keep this page open, or save a local backup.',true);throw error; }
+      catch(error) { this.onStatus('Typing data is waiting to be saved. Keep this page open, or save a local backup.',true);throw error; }
       finally { this.flushFlight=null; }
     }
     async flushAll() {
@@ -279,7 +276,7 @@
     }
     async stop(reason) {
       if (!this.closed) {
-        this.detach(true);this.closed=true;this.composing=false;
+        this.detach();this.closed=true;this.composing=false;
         if (this.current?.state!=='sent') {
           this.current.text=this.textarea.value;this.current.state='unsent';
           this.emit('draft_unsent',{text:this.current.text,reason});
@@ -293,9 +290,8 @@
     backup() {
       return {format:'slp-local-recording-backup',recording_version:1,exported_ms:this.wall(),state:clone(this.state),events:this.queue.map(({persisted,...event})=>clone(event))};
     }
-    detach(keepSync=false) {
+    detach() {
       for(const remove of this.listeners.splice(0)) remove();
-      if (this.timer && !keepSync) { this.win.clearInterval(this.timer);this.timer=null; }
     }
     dispose() { this.detach();this.releaseLock?.(); }
   }

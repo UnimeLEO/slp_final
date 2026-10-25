@@ -128,3 +128,9 @@ https://你的实际Worker域名/health
 ## 0.3.2: prevent excessive D1 reads
 
 Replace the deployed Worker with the current `worker/worker.mjs` and deploy. No SQL migration or secret changes are needed. Hard-refresh the participant and researcher pages to load assets tagged `v=032`. Check `/health` for version `0.3.2` once D1 is available again. An exhausted daily account quota remains blocked until its reset or a plan change; deploying this fix does not restore the consumed quota.
+
+## 0.3.3: local-first recording
+
+Replace the deployed Worker with the current `worker/worker.mjs` and deploy, then hard-refresh both GitHub Pages interfaces to load assets tagged `v=033`. No SQL migration or secret changes are required. Check `/health` for version `0.3.3`.
+
+During an active task, participant keystroke events stay in browser IndexedDB. The client uploads them in byte-bounded batches of up to 500 only when the task ends or when it recovers an older unfinished outbox. Chat messages continue to be written immediately.

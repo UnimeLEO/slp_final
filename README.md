@@ -128,3 +128,9 @@ Deploy `worker/worker.mjs` to the existing Worker, then hard-refresh both Pages 
 Both upload conflict checks now iterate the incoming JSON batch first and perform exact `(session_id,page_id,seq)` indexed lookups, avoiding history-by-batch scans. Fully linked sent drafts are no longer updated on every event upload. Ordinary `admin_session` calls omit recording aggregates by default; send `include_recording:true` for a full summary. The researcher UI requests that summary when opening a task or clicking **刷新记录统计**, rather than on every chat poll. The session list refreshes every 15 seconds. Chat polling and automatic recording uploads use capped exponential backoff after errors; durable local events are retained.
 
 Validated by 42 automated tests, including query-plan checks for both indexed conflict lookups, an assertion that normal monitoring never queries the event table, and automatic upload retry backoff. Query-plan/VM measurements are local SQLite evidence, not measured Cloudflare billable rows.
+
+### Local-first recording 0.3.3
+
+Participant keystroke events remain durably stored in browser IndexedDB while a task is active. They are uploaded only when the task ends or when a later login recovers an unfinished local outbox. Uploads contain up to 500 events while remaining below the 250000-byte client limit. Ordinary chat messages still reach D1 immediately so Human and AI conversations continue normally.
+
+Deploy the current `worker/worker.mjs`, then hard-refresh the participant and researcher pages. No D1 migration or secret change is required. `/health` should report version `0.3.3`.

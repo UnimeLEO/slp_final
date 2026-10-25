@@ -37,7 +37,7 @@ function edit(f,text,inputType='insertText',extra={}) {
   f.textarea.value=text;f.textarea.selectionStart=f.textarea.selectionEnd=text.length;
   dispatch(f.textarea,'input',{inputType,data:extra.data ?? text,isComposing:!!extra.isComposing});
 }
-async function fixture({store=new MemoryStore(),call,server=false}={}) {
+async function fixture({store=new MemoryStore(),call,server=false,initialFlush=true}={}) {
   const f=environment();let clock=100,wall=10000;
   let actor;
   if(server) { const context=setup();actor=await context.create('01');await actor.participant({action:'participant_start',session_id:'01-T1'});f.context=context;f.actor=actor; }
@@ -49,7 +49,7 @@ async function fixture({store=new MemoryStore(),call,server=false}={}) {
   });
   const status=[];
   const recorder=new f.Recorder({base:'https://worker.test',participantId:'01',sessionId:'01-T1',textarea:f.textarea,store,call:transport,doc:f.doc,win:f.win,now:()=>clock++,wall:()=>wall++,timeOrigin:1000,onStatus:(message,error)=>status.push({message,error})});
-  await recorder.initialize();await recorder.flushAll();
+  await recorder.initialize();if(initialFlush) await recorder.flushAll();
   return {...f,store,recorder,uploaded,status};
 }
 test('records replacement, paste, undo and selection without keydown-based text reconstruction',async()=>{
@@ -163,15 +163,14 @@ test('maximum-length replacement with control characters stays below upload boun
 });
 
 
-test('automatic upload retries back off while queued events remain durable',async()=>{
- const f=await fixture();let calls=0;
- f.recorder.call=async()=>{calls++;throw new Error('quota unavailable');};
- edit(f,'keep this draft');await f.recorder.persist();
- await assert.rejects(f.recorder.flush());
- const queued=f.recorder.queue.length;assert.ok(queued>0);
- for(let n=0;n<10;n++)f.win.intervalTick();
- await Promise.resolve();assert.equal(calls,1);assert.equal(f.recorder.queue.length,queued);
- f.recorder.retryAfter=0;f.win.intervalTick();await f.recorder.flushFlight.catch(()=>{});
- assert.equal(calls,2);assert.ok(f.recorder.retryAfter>0);
- f.recorder.dispose();
+test('active-task events stay local and upload in large batches only when stopped',async()=>{
+ const f=await fixture({initialFlush:false});
+ for(let n=0;n<600;n++)dispatch(f.textarea,'keydown',{key:'a',code:'KeyA'});
+ await f.recorder.persist();
+ assert.equal(f.uploaded.length,0);assert.ok(f.store.events.size>=602);
+ dispatch(f.win,'online');dispatch(f.doc,'visibilitychange');dispatch(f.win,'pagehide');
+ await f.recorder.persist();assert.equal(f.uploaded.length,0);
+ await f.recorder.stop('test');
+ assert.equal(f.uploaded.length,2);assert.equal(f.uploaded[0].events.length,500);
+ assert.equal(f.store.events.size,0);f.recorder.dispose();
 });

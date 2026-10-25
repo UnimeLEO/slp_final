@@ -1,7 +1,7 @@
-// SLP v0.3.2 — Participant draft recording, durable event sync and Human/AI chat.
+// SLP v0.3.3 — Local-first participant recording and Human/AI chat.
 // Bind a dedicated D1 database as DB, set ADMIN_SECRET (Secret, >=20 characters).
 // Optional ALLOWED_ORIGIN (Text) defaults to this project's GitHub Pages origin.
-const VERSION = '0.3.2';
+const VERSION = '0.3.3';
 const DEFAULT_ORIGIN = 'https://unimeleo.github.io';
 const MAX_BODY_BYTES = 524288;
 
@@ -392,7 +392,7 @@ async function ingestRecording(db, session, body) {
   if (session.status === 'ready') fail(409, 'The conversation has not started.');
   if (body.recording_version !== RECORDING_VERSION) fail(400, 'Unsupported recording format.');
   const page = validatePage(body.page);
-  if (!Array.isArray(body.events) || body.events.length > 25 || !Array.isArray(body.drafts) || body.drafts.length > 25) fail(400, 'Invalid recording batch.');
+  if (!Array.isArray(body.events) || body.events.length > 500 || !Array.isArray(body.drafts) || body.drafts.length > 50) fail(400, 'Invalid recording batch.');
   const drafts = body.drafts.map(draft => validateDraft(draft, page.page_id));
   if (new Set(drafts.map(d => d.draft_id)).size !== drafts.length || new Set(drafts.map(d => d.client_message_id)).size !== drafts.length) fail(400, 'Duplicate draft in batch.');
   let previousSeq = 0;
