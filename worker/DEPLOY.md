@@ -1,15 +1,13 @@
-# Cloudflare 控制台部署：slp-final-admin（0.3.0）
+# Cloudflare 控制台部署：slp-final-admin（1.0.0）
 
-## 已部署 0.2.x：升级到 0.3.0
+## 当前升级：0.3.3 → 1.0.0
 
-1. **先**用仓库 `worker/worker.mjs` 全文替换现有 Worker 入口并 Deploy。新版可同时识别 schema 2 和 3。
-2. **再**到现有 SLP 专用 D1 Console 执行 `migrations/003-recording.sql` 的全文。只加记录表和索引，不删参与者、消息或 AI 配置。
-3. 不更改 `DB`、`ADMIN_SECRET`、`OPENAI_API_KEY` 或模型参数，也不执行旧迁移 002。
-4. `/health` 应返回 `version: "0.3.0"`、`recording_enabled: true`、`database: "ready"`。
-5. GitHub Pages 更新后强制刷新两端；新建一个未使用的编号测试记录。旧聊天没有历史击键数据，无法补录。
-6. 任务结束后从工作台导出完整 JSON、事件 CSV 和草稿时间线，检查 Participant 记录状态。实际输入法和断网测试见 [RECORDING.md](../RECORDING.md)。
-
-记录未就绪时，新版参与者页面会阻止进入，避免静默收集无草稿记录的测试；不需要新增任何密钥或绑定。
+1. 用仓库 `worker/worker.mjs` 全文替换现有 Worker 入口并 Deploy。
+2. 不执行 SQL，不更改 `DB`、`ADMIN_SECRET`、`OPENAI_API_KEY` 或模型参数。
+3. `/health` 应返回 `version: "1.0.0"`、`recording_enabled: true`、`database: "ready"`。
+4. GitHub Pages 更新后强制刷新两端；工作台页头应显示“正式版 1.0.0”。
+5. 用一个新编号完成冒烟测试，确认消息、任务结束和ZIP下载正常。
+6. 正式账号必须在升级后创建；旧会话会保留创建时的旧材料快照。
 
 ## 已部署 0.1.0：增量升级
 
@@ -74,7 +72,7 @@ https://你的实际Worker域名/health
 数据库、密钥与模型名称均已配置时返回：
 
 ```json
-{"ok":true,"service":"slp-final","version":"0.3.0","recording_enabled":true,"database":"ready","ai_enabled":true}
+{"ok":true,"service":"slp-final","version":"1.0.0","recording_enabled":true,"database":"ready","ai_enabled":true}
 ```
 
 | 返回结果 | 检查 |
@@ -87,26 +85,24 @@ https://你的实际Worker域名/health
 
 健康检查不验证研究者口令；管理端解锁时会验证。
 
-## 6. 两端聊天测试
+## 6. 正式版冒烟测试
 
-1. 等待 GitHub Pages 更新至 0.3.0。刷新工作台，页头应显示“开发版 0.3.0”。
+1. 等待 GitHub Pages 更新至 1.0.0。刷新工作台，页头应显示“正式版 1.0.0”。
 2. 输入实际 Worker 地址、研究者口令，点击“连接并解锁”。
-3. 创建 `TEST01`，保持顺序 1：Human A → AI B。先保存新访问码。
+3. 创建一个未使用的测试编号，保持顺序 1：Human A → AI B。先保存新访问码。
 4. 复制工作台中的“参与者链接”，在另一台电脑或另一浏览器打开。链接包含非敏感服务器地址，不含口令或访问码。
-5. 输入 TEST01 及访问码，点击 Continue，再点击 Start conversation。
-6. 工作台打开 `TEST01-T1`，双方互发消息。
+5. 输入编号及访问码，点击 Continue，再点击 Start conversation。
+6. 工作台打开对应的 T1 会话，双方互发消息。
 7. 参与者结束后，工作台应显示已结束；也可以用新的测试编号测试研究者终止。
 8. 导出 JSON / CSV / TXT，核对消息与结束原因。
-9. 在模型和密钥配置完成后，继续 Task 2 验证 AI，或创建 TEST02 并使用 AI 优先的顺序 2。
+9. 在模型和密钥配置完成后，继续 Task 2 验证 AI，或另建编号并使用 AI 优先的顺序 2。
 10. 在工作台打开 AI 任务，查看“AI 回复状态”。错误只在管理端显示技术原因；可显式重试失败的回复。导出 JSON 检查生成耗时和延迟记录。
 
-测试创建更多记录时用 TEST02、TEST03 等编号。重复编号不会覆盖原记录。
-
-编号可用 `01`、`02` 等，无需前缀，前导零保留。以上 TEST 编号为兼容旧流程的示例；测试记录可用尚未使用的编号，重复编号不会覆盖记录。
+编号可用 `01`、`02` 等，无需前缀，前导零保留；重复编号不会覆盖原记录。
 
 ## 已知边界
 
-- 0.3.0 包括 Participant 草稿记录，正式知情同意与问卷仍待接入。
+- 知情同意、背景问卷与任务后身份判断在平台外单独实施。
 - 消息通过轮询传递，前台约 1.5 秒一次，隐藏页约 5 秒一次；两种角色使用同一个服务。
 - 每次读取最多 500 条新消息，后续轮询继续读取，避免单次返回无限增长。
 - 参与者刷新后需重新输入编号与访问码，服务端恢复当前任务和已发送消息；草稿与待确认发送可通过 IndexedDB 恢复；本机站点数据被清除或未提交时不保证恢复。
@@ -121,7 +117,7 @@ https://你的实际Worker域名/health
 - `provider_response_incomplete`：未完整结束的响应不会作为正常回复发布；检查输出预算和 reasoning 设置。
 - `provider_timeout`：模型请求超过 25 秒；该任务不会自行无限重复调用。
 
-更正 Cloudflare 密钥后，可以在管理端点击重试。模型与参数已冻结到开始时的任务快照；更改模型参数需创建新的测试任务。
+更正 Cloudflare 密钥后，可以在管理端点击重试。模型与参数已冻结到开始时的任务快照；更改模型参数只会影响尚未开始的 AI 任务。
 
 现有 SLP Worker 同时服务两端。如为整个 Worker 启用 Cloudflare Access 登录保护，会影响 GitHub Pages 的跨域 API 请求；研究者操作由 `ADMIN_SECRET` 验证。
 
@@ -134,3 +130,9 @@ Replace the deployed Worker with the current `worker/worker.mjs` and deploy. No 
 Replace the deployed Worker with the current `worker/worker.mjs` and deploy, then hard-refresh both GitHub Pages interfaces to load assets tagged `v=033`. No SQL migration or secret changes are required. Check `/health` for version `0.3.3`.
 
 During an active task, participant keystroke events stay in browser IndexedDB. The client uploads them in byte-bounded batches of up to 500 only when the task ends or when it recovers an older unfinished outbox. Chat messages continue to be written immediately.
+
+## 1.0.0: formal experiment release
+
+Deploy the current `worker/worker.mjs`, then hard-refresh both GitHub Pages interfaces to load assets tagged `v=100`. No SQL migration or secret changes are required. `/health` must report version `1.0.0` before formal participant accounts are created.
+
+Scenario A is the Sydney trip and make-up examination task. Scenario B is the furniture shopping and part-time shift task. Both sets of Participant and Jimmy instructions are fixed server-side. The AI receives only Jimmy's role instructions and the sent chat transcript; the Participant's private task card is excluded. Existing sessions retain their earlier material snapshots, so formal participant accounts must be created after deploying 1.0.0.

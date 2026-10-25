@@ -1,7 +1,7 @@
-// SLP v0.3.3 — Local-first participant recording and Human/AI chat.
+// SLP v1.0.0 — Formal Human/AI interaction experiment.
 // Bind a dedicated D1 database as DB, set ADMIN_SECRET (Secret, >=20 characters).
 // Optional ALLOWED_ORIGIN (Text) defaults to this project's GitHub Pages origin.
-const VERSION = '0.3.3';
+const VERSION = '1.0.0';
 const DEFAULT_ORIGIN = 'https://unimeleo.github.io';
 const MAX_BODY_BYTES = 524288;
 
@@ -85,6 +85,31 @@ const publicSession = session => session ? {
   ended_ms: session.ended_ms
 } : null;
 
+// Canonical formal-task materials are held on the server so every newly
+// created participant receives the same immutable scenario snapshots.
+const FORMAL_SCENARIOS = Object.freeze({
+  A: Object.freeze({
+    participant: `You are Robin, a student at M University. Jimmy is your classmate and a close friend. It is the start of the break following final exams, and you and Jimmy have fully planned a trip to Sydney. However, you have just received notice that you must take an important make-up exam at the start of the break—specifically, on the morning of the second day of your trip (the day after tomorrow). Consequently, you would like to postpone the trip by at least two days. You start the conversation.`,
+    interlocutor: `You are participating in a roleplay. Please adhere to the following character guidelines:
+
+1. Your Role: Your name is Jimmy. The other person, Robin, is your classmate at M University and a close friend.
+2. Background: It is the start of the break following final exams. You and Robin have meticulously planned a trip to Sydney, and you have already paid a non-refundable deposit for the hotel. On the eve of your departure, Robin sends you a message via an online chat app.
+3. Objective: Your initial stance is to stick to the original plan and depart tomorrow; you are reluctant to postpone the trip. You should listen to Robin’s explanation and work toward a mutually acceptable solution.
+4. Constraints: Do not preemptively react or make assumptions about Robin’s intentions before they have clearly stated the issue or request (e.g., do not refuse or explain the current situation immediately after a simple greeting). While you are hesitant to delay the trip—given the extensive preparations already made—you are open to considering reasonable alternatives based on Robin’s explanation. **Until Robin brings up the trip or a related issue, do not initiate discussion of the trip or ask whether the existing plans are still going ahead. Respond naturally to greetings and small talk.**
+5. Output: Provide only the chat messages from the perspective of "Jimmy." Your tone should reflect the casual, natural rapport of close friends. Do not include any system-generated text, acknowledge your identity as an AI, provide narration, use character labels, or employ Markdown formatting. All output must be in English.`
+  }),
+  B: Object.freeze({
+    participant: `You are Robin, a university student. Jimmy is a close friend of many years. You both study at different universities in the same city and share a student apartment. It is the start of the new semester, and you and Jimmy have agreed to go and buy second-hand desks and chairs together this Saturday morning and bring them home the same day. However, you have just received a message from the manager of the café where you work part-time: a colleague has suddenly fallen ill, and the manager has asked you to cover a full shift for them this Saturday. If you refuse, you might lose this part-time job. Consequently, you would like to postpone the furniture shopping until at least next weekend. You start the conversation and negotiate with Jimmy until the conversation comes to a natural end.`,
+    interlocutor: `You are participating in a roleplay. Please adhere to the following character guidelines:
+
+1. Your Role: Your name is Jimmy. The other person, Robin, is a close friend of many years. You both study at different universities in the same city and share a student apartment.
+2. Background: It is the start of the new semester, and your rooms still lack desks and chairs. You and Robin agreed long ago to go and buy second-hand desks and chairs together this Saturday morning and bring them home the same day. To make this possible, you have already arranged to borrow a car from a friend, who can only lend it to you this Saturday because he will need it himself for the next few weeks. Robin does not know these details about the car. On Friday evening, Robin, who is not at home, sends you a message via an online chat app.
+3. Objective: Your initial stance is to stick to the original plan and go shopping on Saturday; you are reluctant to reschedule. You should listen to Robin’s explanation and work toward a mutually acceptable solution.
+4. Constraints: Do not preemptively react or make assumptions about Robin’s intentions before they have clearly stated the issue or request (e.g., do not refuse or explain the current situation immediately after a simple greeting). While you are hesitant to reschedule—given that you have already arranged to borrow the car—you are open to considering reasonable alternatives based on Robin’s explanation. **Until Robin brings up the furniture shopping or the Saturday plans, do not initiate discussion of them or ask whether the existing plans are still going ahead. Respond naturally to greetings and small talk.** The outcome of the conversation is not predetermined and should emerge naturally from your exchange; do not end the conversation on your own initiative.
+5. Output: Provide only the chat messages from the perspective of "Jimmy." Your tone should reflect the casual, natural rapport of close friends. Do not include any system-generated text, acknowledge your identity as an AI, provide narration, use character labels, or employ Markdown formatting. All output must be in English.`
+  })
+});
+
 async function findSession(db, id) {
   const session = await statement(db, 'SELECT * FROM sessions WHERE id=?', textField(id, 'session_id', 80)).first();
   if (!session) fail(404, 'Session not found.');
@@ -115,15 +140,9 @@ async function createParticipant(db, body) {
     [['human', 'B'], ['ai', 'A']],
     [['ai', 'B'], ['human', 'A']]
   ];
-  const materials = {};
-  for (const name of ['A', 'B']) {
-    materials[name] = {
-      participant: textField(body.scenarios?.[name]?.participant, `Scenario ${name}: participant instructions`),
-      interlocutor: textField(body.scenarios?.[name]?.interlocutor, `Scenario ${name}: interlocutor instructions`)
-    };
-  }
+  const materials = FORMAL_SCENARIOS;
   if (await statement(db, 'SELECT participant_code FROM participants WHERE participant_code=?', code).first()) {
-    fail(409, 'Participant code already exists. Use a new code for a new test.');
+    fail(409, 'Participant code already exists. Use a new code for a new participant.');
   }
   const access = accessCode();
   const created = Date.now();
@@ -181,7 +200,6 @@ async function endSession(db, session, who) {
 // so it does not consume a live Worker invocation or depend on a browser timer.
 const AI_DEFAULTS = {
   model: '',
-  base_prompt: 'Take part in this English text-based negotiation role-play as the interlocutor described in your role instructions. Follow the stated initial position and acceptable alternatives. Respond to the participant naturally in concise conversational turns. Do not immediately agree just to be helpful. Output only your next plain-text message, without analysis, headings, or commentary about the platform. Stay within the role-play rather than discussing model names, APIs, or system prompts.',
   ms_per_character: 25,
   random_min_ms: 500,
   random_max_ms: 1500,
@@ -192,7 +210,6 @@ function validateAiConfig(value, fallbackModel = '') {
   const config = { ...AI_DEFAULTS, ...value };
   config.model = String(config.model || fallbackModel || '').trim();
   if (config.model.length > 120 || /\s/.test(config.model)) fail(400, 'Use a valid API model identifier.');
-  config.base_prompt = textField(config.base_prompt, 'AI role prompt', 10000);
   for (const [key, max] of [['ms_per_character', 500], ['random_min_ms', 60000], ['random_max_ms', 60000]]) {
     config[key] = Number(config[key]);
     if (!Number.isFinite(config[key]) || config[key] < 0 || config[key] > max) fail(400, 'Invalid delay setting: ' + key);
@@ -270,7 +287,9 @@ async function processAi(db, session, env) {
     const transcript = (await statement(db, "SELECT sender,text FROM messages WHERE session_id=? AND (id<=? OR sender='interlocutor') ORDER BY id", session.id, job.trigger_message_id).all()).results;
     const payload = {
       model: config.model,
-      instructions: config.base_prompt + '\n\nParticipant situation:\n' + session.participant_prompt + '\n\nYour interlocutor role:\n' + session.interlocutor_prompt,
+      // The participant's private task card is deliberately excluded. The
+      // model receives only Jimmy's role, matching the Human interlocutor.
+      instructions: session.interlocutor_prompt,
       input: transcript.map(row => ({ role: row.sender === 'participant' ? 'user' : 'assistant', content: row.text })),
       max_output_tokens: config.max_output_tokens,
       store: false
@@ -458,7 +477,7 @@ async function api(request, env, body) {
     if (action === 'admin_state') {
       const result = await statement(db, 'SELECT id,participant_code,task_number,condition,scenario_code,status,created_ms,started_ms,ended_ms,end_reason FROM sessions ORDER BY created_ms DESC,participant_code,task_number').all();
       const config = await aiConfig(db, env);
-      return { recording_enabled: await recordingEnabled(db), sessions: result.results, version: VERSION, ai_enabled: aiConfigured(env, config), ai_config: config, api_key_configured: Boolean(env.OPENAI_API_KEY) };
+      return { recording_enabled: await recordingEnabled(db), sessions: result.results, version: VERSION, scenarios: FORMAL_SCENARIOS, ai_enabled: aiConfigured(env, config), ai_config: config, api_key_configured: Boolean(env.OPENAI_API_KEY) };
     }
     if (action === 'admin_save_ai') {
       const config = validateAiConfig(body.config || {}, env.OPENAI_MODEL);

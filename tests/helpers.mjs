@@ -38,9 +38,8 @@ export function setup() {
     const data = response.status === 204 ? null : await response.json();
     return { response, data };
   }
-  const scenarios = { A: { participant: 'Participant A', interlocutor: 'Hidden role A' }, B: { participant: 'Participant B', interlocutor: 'Hidden role B' } };
   async function create(code = 'TEST01', order = 0) {
-    const result = await request({ action: 'admin_create', participant_code: code, order_index: order, scenarios }, { admin: true });
+    const result = await request({ action: 'admin_create', participant_code: code, order_index: order }, { admin: true });
     assert.equal(result.response.status, 200);
     const credentials = { participant_code: code, access_code: result.data.access_code };
     return { credentials, participant: body => request({ ...credentials, ...body }), admin: body => request(body, { admin: true }) };

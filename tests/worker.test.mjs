@@ -34,7 +34,7 @@ test('participant access, hidden identity, owned session isolation', async () =>
   await create('TEST02');
   const joined = await first.participant({ action: 'participant_join' });
   assert.equal(joined.data.session.id, 'TEST01-T1');
-  assert.equal(joined.data.session.participant_prompt, 'Participant A');
+  assert.match(joined.data.session.participant_prompt, /make-up exam/);
   for (const field of ['condition', 'scenario_code', 'interlocutor_prompt', 'access_hash', 'access_code']) assert.equal(field in joined.data.session, false);
   assert.equal((await request({ action: 'participant_join', participant_code: 'TEST01', access_code: 'wrong' })).response.status, 401);
   assert.equal((await first.participant({ action: 'participant_session', session_id: 'TEST02-T1' })).response.status, 403);
@@ -61,14 +61,16 @@ test('numeric codes retain leading zeros through creation, login, chat, export a
     assert.equal((await request({ action: 'participant_join', participant_code: code, access_code: 'wrong' })).response.status, 400);
   }
 });
-test('four orders are persisted correctly and creation is atomic', async () => {
+test('four formal-task orders are persisted correctly and creation is atomic', async () => {
   const { create, request, env } = setup();
   const expected = [['humanA', 'aiB'], ['aiA', 'humanB'], ['humanB', 'aiA'], ['aiB', 'humanA']];
   for (let i = 0; i < 4; i++) await create('P0' + (i + 1), i);
   const rows = (await request({ action: 'admin_state' }, { admin: true })).data.sessions;
   for (let i = 0; i < 4; i++) assert.deepEqual(rows.filter(s => s.participant_code === 'P0' + (i + 1)).sort((a, b) => a.task_number - b.task_number).map(s => s.condition + s.scenario_code), expected[i]);
   const duplicate = await request({ action: 'admin_create', participant_code: 'P01', order_index: 0 }, { admin: true });
-  assert.equal(duplicate.response.status, 400); // missing materials cannot create partial records
+  assert.equal(duplicate.response.status, 409);
+  const invalid = await request({ action: 'admin_create', participant_code: 'P05', order_index: 9 }, { admin: true });
+  assert.equal(invalid.response.status, 400);
   assert.equal(env.DB.db.prepare('SELECT COUNT(*) AS n FROM participants').get().n, 4);
   assert.equal(env.DB.db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 8);
 });
@@ -176,7 +178,10 @@ test('AI generation preserves role input, configuration snapshots, usage and hid
   assert.equal(calls, 1);
   assert.equal(payload.model, 'test-model');
   assert.equal(payload.store, false);
-  assert.match(payload.instructions, /Hidden role A/);
+  assert.match(payload.instructions, /non-refundable deposit/);
+  assert.doesNotMatch(payload.instructions, /make-up exam/); // Robin's private task card is not disclosed to Jimmy.
+  const monitored = await admin({ action: 'admin_session', session_id });
+  assert.equal(payload.instructions, monitored.data.session.interlocutor_prompt);
   assert.deepEqual(payload.input, [{ role: 'user', content: send.text }]);
   assert.deepEqual(result.data.messages.map(m => m.sender), ['participant', 'interlocutor']);
   assert.equal(result.data.messages.at(-1).text, 'Could we find another arrangement?');

@@ -12,10 +12,18 @@
     epoch++; selectVersion++; aiLoaded = false; clearTimeout(timer); secret = ''; selected = null; pending = null; sending = false;
     view.reset(); $('human-draft').value = ''; $('human-draft').readOnly = false;
     $('created-participant').value = ''; $('created-access-code').value = ''; $('credentials-receipt').hidden = true;
-    $('session-rows').replaceChildren(); $('human-role').textContent = ''; $('human-participant-prompt').textContent = '';
+    $('session-rows').replaceChildren(); $('human-role').textContent = '';
     $('admin-workspace').hidden = true; $('human-panel').hidden = true;
     $('login-panel').hidden = false; $('logout').hidden = true;
     status('human-status', ''); status('admin-status', '工作台已锁定。');
+  }
+  function fillScenarioForm(scenarios) {
+    for (const code of ['A', 'B']) {
+      const material = scenarios?.[code];
+      if (!material) continue;
+      $('scenario-' + code.toLowerCase() + '-participant').value = material.participant;
+      $('scenario-' + code.toLowerCase() + '-interlocutor').value = material.interlocutor;
+    }
   }
   function sessionState(session) {
     selected = session;
@@ -30,7 +38,7 @@
     const stamp = epoch;
     const data = await call({ action: 'admin_state' });
     if (stamp !== epoch || !secret) return;
-    updateAiStatus(data);
+    updateAiStatus(data); fillScenarioForm(data.scenarios);
     if (!aiLoaded) { fillAiForm(data.ai_config); aiLoaded = true; }
     const fragment = document.createDocumentFragment();
     if (!data.sessions.length) {
@@ -85,7 +93,6 @@
       view.reset(); view.append(data.messages); sessionState(data.session); showAiJobs(data);showRecording(data.recording);
       $('human-title').textContent = data.session.id + ' · ' + (data.session.condition === 'human' ? 'Human 对话' : 'AI 任务监控');
       $('human-role').textContent = data.session.interlocutor_prompt;
-      $('human-participant-prompt').textContent = data.session.participant_prompt;
       $('human-panel').hidden = false; status('human-status', '会话已载入。');
     } catch (error) { errorAt('admin-status', error); }
   }
@@ -99,7 +106,7 @@
       $('login-panel').hidden = true; $('admin-workspace').hidden = false; $('logout').hidden = false;
       const link = new URL('./index.html', location.href); link.searchParams.set('server', base);
       $('participant-link').value = link.href;
-      status('admin-status', '已连接。可创建测试会话；聊天消息将保存在 SLP 数据库。');
+      status('admin-status', '已连接正式实验后端。可创建参与者并运行会话。');
       poll();
     } catch (error) { secret = ''; errorAt('admin-status', error); }
     finally { $('connect-button').disabled = false; }
@@ -136,17 +143,12 @@
     event.preventDefault(); const stamp = epoch;
     $('create-fields').disabled = true;
     try {
-      const scenarios = {};
-      for (const code of ['A', 'B']) scenarios[code] = {
-        participant: $('scenario-' + code.toLowerCase() + '-participant').value,
-        interlocutor: $('scenario-' + code.toLowerCase() + '-interlocutor').value
-      };
-      const data = await call({ action: 'admin_create', participant_code: $('new-code').value, order_index: Number($('task-order').value), scenarios });
+      const data = await call({ action: 'admin_create', participant_code: $('new-code').value, order_index: Number($('task-order').value) });
       if (stamp !== epoch || !secret) return;
       $('created-participant').value = data.participant_code;
       $('created-access-code').value = data.access_code;
       $('credentials-receipt').hidden = false;
-      status('admin-status', '两任务已创建。请保存新访问码，再进行测试。');
+      status('admin-status', '正式参与者及两项任务已创建。请保存Access Code。');
       await refreshList();
     } catch (error) { if (stamp === epoch) errorAt('admin-status', error); }
     finally { $('create-fields').disabled = false; }
@@ -218,10 +220,10 @@
   }
   function fillAiForm(config) {
     if (!config) return;
-    for (const [id, key] of [['ai-model','model'],['ai-delay-k','ms_per_character'],['ai-delay-min','random_min_ms'],['ai-delay-max','random_max_ms'],['ai-output-budget','max_output_tokens'],['ai-reasoning','reasoning_effort'],['ai-base-prompt','base_prompt']]) $(id).value = config[key];
+    for (const [id, key] of [['ai-model','model'],['ai-delay-k','ms_per_character'],['ai-delay-min','random_min_ms'],['ai-delay-max','random_max_ms'],['ai-output-budget','max_output_tokens'],['ai-reasoning','reasoning_effort']]) $(id).value = config[key];
   }
   function updateAiStatus(data) {
-    $('ai-config-state').textContent = data.ai_enabled ? '已配置 · 需实际测试' : (data.api_key_configured ? '请配置模型' : '未设置 OPENAI_API_KEY');
+    $('ai-config-state').textContent = data.ai_enabled ? '已配置' : (data.api_key_configured ? '请配置模型' : '未设置 OPENAI_API_KEY');
     $('ai-config-state').className = 'badge' + (data.ai_enabled ? ' connected' : '');
   }
   function showAiJobs(data) {
@@ -235,13 +237,13 @@
     $('ai-config-fields').disabled = true;
     try {
       const config = {
-        model: $('ai-model').value.trim(), base_prompt: $('ai-base-prompt').value,
+        model: $('ai-model').value.trim(),
         ms_per_character: Number($('ai-delay-k').value), random_min_ms: Number($('ai-delay-min').value), random_max_ms: Number($('ai-delay-max').value),
         max_output_tokens: Number($('ai-output-budget').value), reasoning_effort: $('ai-reasoning').value
       };
       const data = await call({ action:'admin_save_ai', config });
       if (stamp !== epoch || !secret) return;
-      updateAiStatus(data); fillAiForm(data.ai_config); status('admin-status','AI 配置已保存。已开始的 AI 任务继续使用原快照。');
+      updateAiStatus(data); fillScenarioForm(data.scenarios); fillAiForm(data.ai_config); status('admin-status','AI 配置已保存。已开始的 AI 任务继续使用原快照。');
     } catch (error) { if (stamp === epoch) errorAt('admin-status',error); }
     finally { $('ai-config-fields').disabled = false; }
   });
