@@ -1,11 +1,17 @@
 'use strict';
 (() => {
-  const { $, api, status } = SLP;
+  const { $, api, status, questionnaireUrl: buildQuestionnaireUrl } = SLP;
   const query = new URLSearchParams(location.search);
   let base = '', credentials = null, session = null, pollTimer = null, polling = false;
   let pending = null, sending = false, controlBusy = false;
   let pollFailures = 0;
   let recorder = null, recordingFinishing = null, initialSync = true;
+  let completionChecking = false, redirecting = false;
+  const consentItems = [
+    'informed_consent', 'voluntary_participation', 'chat_records',
+    'keystroke_data', 'partner_identity', 'questionnaire', 'use_of_data',
+    'withdrawal', 'final_confirmation'
+  ];
   const interlocutorName = window.SLP_CONFIG.INTERLOCUTOR_NAME || 'Jimmy';
   $('interlocutor-name').textContent = interlocutorName;
   const view = SLP.chatView($('messages'), 'participant', { otherLabel: interlocutorName, showSeconds: false,
@@ -39,6 +45,34 @@
   updateEntry();
   const call = body => api(base, { ...credentials, ...body });
   const showError = (id, error) => status(id, error.message || String(error), true);
+  function questionnaireUrl() {
+    return buildQuestionnaireUrl(
+      window.SLP_CONFIG.QUALTRICS_URL,
+      window.SLP_CONFIG.QUALTRICS_PARTICIPANT_FIELD || 'Participant Code',
+      credentials.participant_code
+    );
+  }
+  function redirectToQuestionnaire() {
+    if (redirecting) return;
+    redirecting = true;
+    clearTimeout(pollTimer);
+    const url = questionnaireUrl();
+    $('entry-page').hidden = true;
+    $('consent-page').hidden = true;
+    $('conversation-page').hidden = true;
+    $('complete-page').hidden = false;
+    $('questionnaire-link').href = url;
+    location.replace(url);
+  }
+  async function redirectIfComplete() {
+    if (completionChecking || redirecting || !credentials) return false;
+    completionChecking = true;
+    try {
+      const data = await call({ action: 'participant_join' });
+      if (data.complete) { redirectToQuestionnaire(); return true; }
+      return false;
+    } finally { completionChecking = false; }
+  }
   function recordingStatus(message,error) {
     status('recording-status',message,error);
     $('save-local-backup').hidden = !error;
@@ -85,7 +119,10 @@
       if (session?.id !== id) return;
       view.append(data.messages); apply(data.session);
       initialSync=false;pollFailures=0;
-      if (data.session.status === 'ended' && recorder) await finishRecording('server_ended');
+      if (data.session.status === 'ended' && recorder) {
+        await finishRecording('server_ended');
+        if (await redirectIfComplete()) return;
+      }
       if (!pending) status('chat-status', data.service_notice || (data.session.status === 'ended' ? 'This conversation has ended.' : ''), !!data.service_notice);
     } catch (error) { pollFailures++;showError('chat-status', error); }
     finally {
@@ -94,14 +131,22 @@
       if (session?.status !== 'ended') pollTimer = setTimeout(poll, pollFailures ? Math.min(60000,3000*2**Math.min(pollFailures,5)) : document.hidden ? 5000 : 1500);
     }
   }
-  async function openNext() {
-    const data = await call({ action: 'participant_join' });
+  async function openNext(joined = null) {
+    const data = joined || await call({ action: 'participant_join' });
     if (data.recording_enabled !== true) throw new Error('Typing recording is not ready. Please contact the researcher.');
+    if (data.consent?.enabled !== true) throw new Error('The consent system is not ready. Please contact the researcher.');
+    if (data.consent.required) {
+      $('consent-participant-code').textContent = credentials.participant_code;
+      $('entry-page').hidden = true;
+      $('conversation-page').hidden = true;
+      $('complete-page').hidden = true;
+      $('consent-page').hidden = false;
+      return;
+    }
     await SLPLogging.recover({base,participantId:credentials.participant_code,excludeSession:data.session?.id,call});
     if (data.complete) {
-      $('entry-page').hidden = true;
-      session = null; clearTimeout(pollTimer);
-      $('conversation-page').hidden = true; $('complete-page').hidden = false;
+      session = null;
+      redirectToQuestionnaire();
       return;
     }
     $('task-heading').textContent = 'Task ' + data.session.task_number + '/2';
@@ -109,7 +154,7 @@
     pending = null; $('message-draft').value = '';
     $('send-message').textContent = 'Send';$('end-task').textContent='End conversation';view.reset(); initialSync=true;apply(data.session);
     await ensureRecorder();
-    $('entry-page').hidden = true;$('conversation-page').hidden = false;
+    $('entry-page').hidden = true;$('consent-page').hidden = true;$('complete-page').hidden = true;$('conversation-page').hidden = false;
     await poll();
   }
   $('entry-form').addEventListener('submit', async event => {
@@ -121,6 +166,20 @@
     catch (error) { credentials = null; showError('entry-status', error); }
     finally { $('entry-fields').disabled = false; updateEntry(); }
   });
+  $('consent-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (controlBusy || !credentials || !$('consent-form').checkValidity()) return;
+    controlBusy = true; $('consent-fields').disabled = true;
+    try {
+      const accepted = consentItems.filter(key => $('consent-form').elements.namedItem(key)?.checked);
+      const data = await call({ action: 'participant_consent', accepted_items: accepted });
+      if (!data.consent?.accepted) throw new Error('Consent could not be recorded.');
+      status('consent-status', 'Consent recorded. Opening the first task…');
+      await openNext();
+    } catch (error) { showError('consent-status', error); }
+    finally { controlBusy = false; $('consent-fields').disabled = false; }
+  });
+  $('print-study-information').addEventListener('click', () => window.print());
   $('start-task').addEventListener('click', async () => {
     if (controlBusy || !session) return;
     controlBusy = true; $('start-task').disabled = true;

@@ -3,6 +3,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import worker from '../worker/worker.mjs';
 
+export const CONSENT_ITEMS = [
+  'informed_consent', 'voluntary_participation', 'chat_records',
+  'keystroke_data', 'partner_identity', 'questionnaire', 'use_of_data',
+  'withdrawal', 'final_confirmation'
+];
+
 // Run the real SQL and Worker handler against SQLite. No Cloudflare credentials.
 class D1Adapter {
   constructor() {
@@ -42,7 +48,10 @@ export function setup() {
     const result = await request({ action: 'admin_create', participant_code: code, order_index: order }, { admin: true });
     assert.equal(result.response.status, 200);
     const credentials = { participant_code: code, access_code: result.data.access_code };
-    return { credentials, participant: body => request({ ...credentials, ...body }), admin: body => request(body, { admin: true }) };
+    const participant = body => request({ ...credentials, ...body });
+    const consent = await participant({ action: 'participant_consent', accepted_items: CONSENT_ITEMS });
+    assert.equal(consent.response.status, 200);
+    return { credentials, participant, admin: body => request(body, { admin: true }) };
   }
   return { env, request, create };
 }

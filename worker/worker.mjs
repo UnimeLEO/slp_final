@@ -1,9 +1,16 @@
-// SLP v1.0.2 — Formal Human/AI interaction experiment.
+// SLP v1.1.0 — Consent-gated formal Human/AI interaction experiment.
 // Bind a dedicated D1 database as DB, set ADMIN_SECRET (Secret, >=20 characters).
 // Optional ALLOWED_ORIGIN (Text) defaults to this project's GitHub Pages origin.
-const VERSION = '1.0.2';
+const VERSION = '1.1.0';
 const DEFAULT_ORIGIN = 'https://unimeleo.github.io';
 const MAX_BODY_BYTES = 524288;
+const CONSENT_VERSION = '1.0';
+const PLS_VERSION = '1.0';
+const CONSENT_ITEM_KEYS = Object.freeze([
+  'informed_consent', 'voluntary_participation', 'chat_records',
+  'keystroke_data', 'partner_identity', 'questionnaire', 'use_of_data',
+  'withdrawal', 'final_confirmation'
+]);
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -50,11 +57,46 @@ async function ready(db) {
   if (!db) fail(503, 'D1 binding DB is missing.');
   try {
     const row = await statement(db, "SELECT value FROM schema_meta WHERE name='schema_version'").first();
-    if (!['2','3'].includes(row?.value)) fail(503, 'Run the SLP database migrations.');
+    if (!['2','3','4'].includes(row?.value)) fail(503, 'Run the SLP database migrations.');
   } catch (error) {
     if (error instanceof HttpError) throw error;
     fail(503, 'D1 schema is not ready. Run migration 002-ai.sql or the full schema.sql.');
   }
+}
+async function schemaVersion(db) {
+  const row = await statement(db, "SELECT value FROM schema_meta WHERE name='schema_version'").first();
+  return Number(row?.value || 0);
+}
+async function consentEnabled(db) {
+  return await schemaVersion(db) >= 4;
+}
+async function consentState(db, code) {
+  if (!await consentEnabled(db)) return { enabled: false, required: false, accepted: true };
+  const row = await statement(db, 'SELECT consent_version,pls_version,accepted_ms FROM participant_consents WHERE participant_code=?', code).first();
+  const accepted = row?.consent_version === CONSENT_VERSION && row?.pls_version === PLS_VERSION;
+  return {
+    enabled: true,
+    required: !accepted,
+    accepted,
+    consent_version: CONSENT_VERSION,
+    pls_version: PLS_VERSION,
+    accepted_ms: accepted ? row.accepted_ms : null
+  };
+}
+async function recordConsent(db, code, body) {
+  if (!await consentEnabled(db)) fail(503, 'Run migration 004-consent.sql before collecting consent.');
+  const items = body.accepted_items;
+  if (!Array.isArray(items) || items.length !== CONSENT_ITEM_KEYS.length ||
+      new Set(items).size !== CONSENT_ITEM_KEYS.length ||
+      CONSENT_ITEM_KEYS.some(key => !items.includes(key))) {
+    fail(400, 'Every consent statement must be accepted before continuing.');
+  }
+  const now = Date.now();
+  await statement(db, `INSERT INTO participant_consents(participant_code,consent_version,pls_version,accepted_items_json,accepted_ms)
+    VALUES(?,?,?,?,?) ON CONFLICT(participant_code) DO UPDATE SET consent_version=excluded.consent_version,
+    pls_version=excluded.pls_version,accepted_items_json=excluded.accepted_items_json,accepted_ms=excluded.accepted_ms`,
+    code, CONSENT_VERSION, PLS_VERSION, JSON.stringify(CONSENT_ITEM_KEYS), now).run();
+  return consentState(db, code);
 }
 async function adminAuth(request, env) {
   if (!env.ADMIN_SECRET || env.ADMIN_SECRET.length < 20) {
@@ -341,7 +383,7 @@ function rawText(value, label) {
   return value;
 }
 async function recordingEnabled(db) {
-  return (await statement(db, "SELECT value FROM schema_meta WHERE name='schema_version'").first())?.value === '3';
+  return Number((await statement(db, "SELECT value FROM schema_meta WHERE name='schema_version'").first())?.value || 0) >= 3;
 }
 async function requireRecording(db) {
   if (!await recordingEnabled(db)) fail(503, 'Typing recording is not ready. Please contact the researcher.');
@@ -477,14 +519,17 @@ async function api(request, env, body) {
     if (action === 'admin_state') {
       const result = await statement(db, 'SELECT id,participant_code,task_number,condition,scenario_code,status,created_ms,started_ms,ended_ms,end_reason FROM sessions ORDER BY created_ms DESC,participant_code,task_number').all();
       const config = await aiConfig(db, env);
-      return { recording_enabled: await recordingEnabled(db), sessions: result.results, version: VERSION, scenarios: FORMAL_SCENARIOS, ai_enabled: aiConfigured(env, config), ai_config: config, api_key_configured: Boolean(env.OPENAI_API_KEY) };
+      return { recording_enabled: await recordingEnabled(db), consent_enabled: await consentEnabled(db), sessions: result.results, version: VERSION, scenarios: FORMAL_SCENARIOS, ai_enabled: aiConfigured(env, config), ai_config: config, api_key_configured: Boolean(env.OPENAI_API_KEY) };
     }
     if (action === 'admin_save_ai') {
       const config = validateAiConfig(body.config || {}, env.OPENAI_MODEL);
       await statement(db, "INSERT INTO app_settings(name,value) VALUES('ai_config',?) ON CONFLICT(name) DO UPDATE SET value=excluded.value", JSON.stringify(config)).run();
       return { ai_config: config, ai_enabled: aiConfigured(env, config), api_key_configured: Boolean(env.OPENAI_API_KEY) };
     }
-    if (action === 'admin_create') return createParticipant(db, body);
+    if (action === 'admin_create') {
+      if (!await consentEnabled(db)) fail(503, 'Run migration 004-consent.sql before creating participants.');
+      return createParticipant(db, body);
+    }
     if (action === 'admin_recording_export') {
       await requireRecording(db);
       const code = codeField(body.participant_code);
@@ -529,9 +574,16 @@ async function api(request, env, body) {
   }
   await ready(db);
   const code = await participantAuth(db, body);
+  if (action === 'participant_consent') return { consent: await recordConsent(db, code, body) };
   if (action === 'participant_join') {
+    const consent = await consentState(db, code);
+    if (consent.required) {
+      return { participant_code: code, session: null, complete: false, consent,
+        recording_enabled:await recordingEnabled(db), recording_version:RECORDING_VERSION };
+    }
     const session = await nextSession(db, code);
-    return { participant_code: code, session: publicSession(session), complete: !session, recording_enabled:await recordingEnabled(db), recording_version:RECORDING_VERSION };
+    return { participant_code: code, session: publicSession(session), complete: !session, consent,
+      recording_enabled:await recordingEnabled(db), recording_version:RECORDING_VERSION };
   }
   const session = await ownedSession(db, code, body.session_id);
   if (action === 'participant_events') return ingestRecording(db,session,body);
@@ -540,6 +592,7 @@ async function api(request, env, body) {
     return { session: publicSession(await findSession(db, session.id)), messages: await readMessages(db, session.id, body.after_id ?? 0), service_notice: await aiServiceNotice(db, session.id) };
   }
   if (action === 'participant_start') {
+    if ((await consentState(db, code)).required) fail(403, 'Consent is required before the task can begin.');
     const next = await nextSession(db, code);
     if (next?.id !== session.id) fail(409, 'Please complete the preceding task first.');
     // Do not reveal condition identity to the participant, even in errors.
@@ -584,7 +637,7 @@ export default {
       if (request.method === 'GET' && (path === '/health' || path === '/')) {
         await ready(env.DB);
         const config = await aiConfig(env.DB, env);
-        return respond({ ok: true, service: 'slp-final', version: VERSION, database: 'ready', recording_enabled:await recordingEnabled(env.DB), ai_enabled: aiConfigured(env, config) });
+        return respond({ ok: true, service: 'slp-final', version: VERSION, database: 'ready', recording_enabled:await recordingEnabled(env.DB), consent_enabled:await consentEnabled(env.DB), ai_enabled: aiConfigured(env, config) });
       }
       if (path !== '/api' || request.method !== 'POST') fail(404, 'Endpoint not found.');
       if (!(request.headers.get('Content-Type') || '').includes('application/json')) fail(415, 'Use application/json.');

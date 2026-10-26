@@ -2,7 +2,7 @@
 
 用于 Second Language Pragmatics 期末实证研究的轻量级文字互动平台。
 
-## 1.0.2 — 正式实验版本
+## 1.1.0 — 正式实验版本
 
 本版用于正式运行真人与 AI 两种互动条件：参与者在自己的电脑操作；Human 条件由研究者扮演 Jimmy 回复，AI 条件通过服务端调用 OpenAI Responses API。一个 Cloudflare Worker 同时提供参与者与管理员 API；管理操作均需服务端验证研究者口令。
 
@@ -17,6 +17,8 @@
 - 生成结果先存 D1，再按目标时间发布到与 Human 相同的消息表和界面。
 - AI 任务开始时冻结配置；连续未处理消息合并，同一任务同一时刻仅有一个生成任务。
 - 身份信息仅在管理端返回，参与者接口不返回 Human / AI 条件及 interlocutor 角色说明。
+- 登录后先显示 PLS 和电子 Consent Form；全部同意项确认并写入独立 D1 表后才能查看和开始任务。
+- 两个任务结束且最后一批输入记录完成同步后，自动转到 Qualtrics，并通过 `Participant Code` 嵌入字段传递参与者编号。
 
 知情同意、背景问卷与任务后的身份判断在平台外单独实施。参与者入口明确提示会记录删除和未发送的文字。
 
@@ -28,7 +30,7 @@
 - IndexedDB 原子保存，分批上传、重试去重、刷新恢复及未发送草稿保留。
 - 草稿与正式消息关联，记录消息在 DOM/可见区域中的呈现观察。
 - 完整 JSON、事件 CSV、草稿时间线和完整性检查；详见 [记录说明](RECORDING.md)。
-- 从 0.2.x 升级：先部署新版 Worker，再执行 `worker/migrations/003-recording.sql`，保留现有记录及密钥。
+- 从 1.0.x 升级：先部署新版 Worker，再执行 `worker/migrations/004-consent.sql`，保留现有记录及密钥。
 
 ### 界面
 
@@ -117,6 +119,7 @@ node --test tests/*.test.mjs
 - **1.0.0**：注入两套正式情境，锁定服务器端材料，移除测试界面标记，并隔离 Participant 与 Jimmy 的私有角色信息。
 - **1.0.1**：两套 Jimmy Prompt 增加请求序列约束：先等待明确请求，再陈述既有顾虑并协商折中方案。
 - **1.0.2**：两套 Jimmy Prompt 改为由 Robin 主动提出解决方案；Jimmy 负责表达顾虑、说明限制并回应提议。
+- **1.1.0**：增加服务器端同意门控、PLS/Consent 页面，以及带参与者编号的 Qualtrics 完成跳转。
 
 ### Frontend update 0.3.1
 

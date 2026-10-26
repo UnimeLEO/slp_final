@@ -60,6 +60,26 @@ fieldset > button { margin-top: 24px; }
 .access-code-fields span { text-align: center; color: #666; }
 .entry-continue { margin-top: 60px; }
 
+/* Study information and electronic consent appear after authentication and before either task. */
+.consent-page { max-width: 950px; margin: 20px auto 50px; padding: 0 18px; }
+.study-information, .consent-form { padding: 34px 38px; }
+.study-information { margin-bottom: 24px; }
+.study-information h1, .consent-form h1 { margin-bottom: 18px; }
+.study-information h2 { margin: 30px 0 10px; font-size: 19px; }
+.study-information li { margin: 8px 0; }
+.project-details { margin: 0; border-top: 1px solid #ddd; }
+.project-details div { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 18px; padding: 10px 0; border-bottom: 1px solid #ddd; }
+.project-details dt { font-weight: 600; }
+.project-details dd { margin: 0; overflow-wrap: anywhere; }
+.print-control { margin-top: 14px; }
+.participant-confirmation { padding: 12px 14px; background: #f7f7f7; border: 1px solid #ddd; }
+.consent-form legend { font-size: 19px; font-weight: 600; margin-bottom: 10px; }
+.consent-item { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: start; margin: 0; padding: 15px 0; border-bottom: 1px solid #e1e1e1; font-weight: 400; cursor: pointer; }
+.consent-item input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: #333; }
+.consent-item span { min-width: 0; }
+.consent-item.final-consent { margin-top: 10px; border: 1px solid #cfcfcf; padding: 15px; grid-template-columns: 22px minmax(0, 1fr); background: #fafafa; }
+#consent-continue { margin-top: 26px; }
+
 /* Task: persistent situation at left, independently scrolling chat at right. */
 .workspace { max-width: 1240px; margin: 28px auto 40px; padding: 0 24px; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
@@ -139,6 +159,9 @@ th { color: #555; font-size: 13px; }
   .access-code-fields { grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr) 10px minmax(0, 1fr); gap: 5px; }
   .access-code-fields input { padding: 10px 4px; letter-spacing: 1px; }
   .entry-continue { margin-top: 40px; }
+  .consent-page { margin: 12px auto 30px; padding: 0 12px; }
+  .study-information, .consent-form { padding: 24px; }
+  .project-details div { grid-template-columns: 1fr; gap: 2px; }
   .workspace { padding: 0 14px; margin-top: 20px; }
   .participant-chat-layout { display: flex; flex-direction: column; height: auto; min-height: 0; }
   .task-aside { width: 100%; min-height: 0; max-height: none; }
@@ -154,4 +177,12 @@ th { color: #555; font-size: 13px; }
   .page-heading { align-items: flex-start; }
   .credential-row { flex-wrap: wrap; }
   .credential-row input { flex-basis: 100%; }
+}
+
+@media print {
+  body { background: #fff; }
+  .entry-page, .participant-workspace, .completion, button, .status-text { display: none !important; }
+  .consent-page, .study-information, .consent-form { max-width: none; margin: 0; padding: 0; border: 0; }
+  .consent-form { break-before: page; }
+  .study-information a { color: #000; text-decoration: none; }
 }

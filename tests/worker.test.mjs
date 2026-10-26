@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import worker from '../worker/worker.mjs';
 
-import { setup } from './helpers.mjs';
+import { CONSENT_ITEMS, setup } from './helpers.mjs';
 
 test('health and CORS: correct origin only; missing DB fails clearly', async () => {
   const { env, request } = setup();
@@ -38,6 +38,35 @@ test('participant access, hidden identity, owned session isolation', async () =>
   for (const field of ['condition', 'scenario_code', 'interlocutor_prompt', 'access_hash', 'access_code']) assert.equal(field in joined.data.session, false);
   assert.equal((await request({ action: 'participant_join', participant_code: 'TEST01', access_code: 'wrong' })).response.status, 401);
   assert.equal((await first.participant({ action: 'participant_session', session_id: 'TEST02-T1' })).response.status, 403);
+});
+test('consent is recorded separately and gates task access', async () => {
+  const { request, env } = setup();
+  const created = await request({ action: 'admin_create', participant_code: 'CONSENT01', order_index: 0 }, { admin: true });
+  const credentials = { participant_code: 'CONSENT01', access_code: created.data.access_code };
+  const participant = body => request({ ...credentials, ...body });
+  const before = await participant({ action: 'participant_join' });
+  assert.equal(before.data.consent.required, true);
+  assert.equal(before.data.session, null);
+  assert.equal((await participant({ action: 'participant_start', session_id: 'CONSENT01-T1' })).response.status, 403);
+  assert.equal((await participant({ action: 'participant_consent', accepted_items: CONSENT_ITEMS.slice(0, -1) })).response.status, 400);
+  const accepted = await participant({ action: 'participant_consent', accepted_items: CONSENT_ITEMS });
+  assert.equal(accepted.data.consent.accepted, true);
+  assert.equal((await participant({ action: 'participant_join' })).data.session.id, 'CONSENT01-T1');
+  const row = env.DB.db.prepare('SELECT * FROM participant_consents WHERE participant_code=?').get('CONSENT01');
+  assert.equal(row.consent_version, '1.0');
+  assert.equal(row.pls_version, '1.0');
+  assert.deepEqual(JSON.parse(row.accepted_items_json), CONSENT_ITEMS);
+});
+test('consent migration is repeatable and preserves existing experiment data', async () => {
+  const { create, env } = setup();
+  await create('MIGRATE01');
+  env.DB.db.exec('DROP TABLE participant_consents');
+  env.DB.db.exec("UPDATE schema_meta SET value='3' WHERE name='schema_version'");
+  const migration = readFileSync(new URL('../worker/migrations/004-consent.sql', import.meta.url), 'utf8');
+  env.DB.db.exec(migration); env.DB.db.exec(migration);
+  assert.equal(env.DB.db.prepare("SELECT value FROM schema_meta WHERE name='schema_version'").get().value, '4');
+  assert.equal(env.DB.db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE participant_code='MIGRATE01'").get().n, 2);
+  assert.equal(env.DB.db.prepare('SELECT COUNT(*) AS n FROM participant_consents').get().n, 0);
 });
 test('numeric codes retain leading zeros through creation, login, chat, export and ending', async () => {
   const { create, request } = setup();

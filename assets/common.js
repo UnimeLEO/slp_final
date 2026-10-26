@@ -8,6 +8,13 @@ window.SLP = (() => {
     }
     return url.href.replace(/\/+$/, '');
   }
+  function questionnaireUrl(raw, field, value) {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.username || url.password || url.hash) throw new Error('Use a valid HTTPS questionnaire URL.');
+    if (typeof field !== 'string' || !field.trim()) throw new Error('Questionnaire participant field is missing.');
+    url.searchParams.set(field, value);
+    return url.href;
+  }
   async function api(base, body, secret = '') {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 40000);
@@ -84,5 +91,5 @@ window.SLP = (() => {
       }
     });
   }
-  return { $, serverUrl, api, status, download, chatView, enterToSend };
+  return { $, serverUrl, questionnaireUrl, api, status, download, chatView, enterToSend };
 })();

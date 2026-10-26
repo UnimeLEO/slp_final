@@ -1,13 +1,16 @@
-# Cloudflare 控制台部署：slp-final-admin（1.0.2）
+# Cloudflare 控制台部署：slp-final-admin（1.1.0）
 
-## 当前升级：1.0.1 → 1.0.2
+## 当前升级：1.0.2 → 1.1.0
 
 1. 用仓库 `worker/worker.mjs` 全文替换现有 Worker 入口并 Deploy。
-2. 不执行 SQL，不更改 `DB`、`ADMIN_SECRET`、`OPENAI_API_KEY` 或模型参数。
-3. `/health` 应返回 `version: "1.0.2"`、`recording_enabled: true`、`database: "ready"`。
-4. GitHub Pages 更新后强制刷新两端；工作台页头应显示“正式版 1.0.2”。
-5. 用一个新编号完成冒烟测试，确认消息、任务结束和ZIP下载正常。
-6. 正式账号必须在升级后创建；旧会话会保留创建时的旧材料快照。
+2. 在 D1 Console 执行 `worker/migrations/004-consent.sql`。该脚本只增加独立同意记录表，不删除或修改已有实验数据。
+3. 不更改 `DB`、`ADMIN_SECRET`、`OPENAI_API_KEY` 或模型参数。
+4. `/health` 应返回 `version: "1.1.0"`、`recording_enabled: true`、`consent_enabled: true`、`database: "ready"`。
+5. GitHub Pages 更新后强制刷新两端；工作台页头应显示“正式版 1.1.0”。
+6. 用一个新编号完成冒烟测试：登录、同意、两次任务、自动进入 Qualtrics，并确认网址带有 `Participant+Code=编号`。
+7. 正式账号必须在升级后创建；旧会话会保留创建时的旧任务材料快照，但也会在下一次登录时要求完成新版同意流程。
+
+Qualtrics 的 Survey Flow 顶部须有名称完全一致的 Embedded Data 字段 `Participant Code`，值留空并由 URL 设置。问卷开头 Text Entry 的 Default Choice 使用 `${e://Field/Participant Code}`，即可显示平台传入的编号。
 
 ## 已部署 0.1.0：增量升级
 
@@ -72,7 +75,7 @@ https://你的实际Worker域名/health
 数据库、密钥与模型名称均已配置时返回：
 
 ```json
-{"ok":true,"service":"slp-final","version":"1.0.2","recording_enabled":true,"database":"ready","ai_enabled":true}
+{"ok":true,"service":"slp-final","version":"1.1.0","recording_enabled":true,"consent_enabled":true,"database":"ready","ai_enabled":true}
 ```
 
 | 返回结果 | 检查 |
@@ -87,7 +90,7 @@ https://你的实际Worker域名/health
 
 ## 6. 正式版冒烟测试
 
-1. 等待 GitHub Pages 更新至 1.0.2。刷新工作台，页头应显示“正式版 1.0.2”。
+1. 等待 GitHub Pages 更新至 1.1.0。刷新工作台，页头应显示“正式版 1.1.0”。
 2. 输入实际 Worker 地址、研究者口令，点击“连接并解锁”。
 3. 创建一个未使用的测试编号，保持顺序 1：Human A → AI B。先保存新访问码。
 4. 复制工作台中的“参与者链接”，在另一台电脑或另一浏览器打开。链接包含非敏感服务器地址，不含口令或访问码。
@@ -144,3 +147,7 @@ Both Jimmy prompts now require the interlocutor to wait for Robin to make a spec
 ## 1.0.2: participant-led solutions
 
 Both Jimmy prompts now prohibit proactive solutions, compromises, and alternatives. Jimmy states concerns and relevant constraints, responds to Robin's proposals, and may accept a reasonable proposal. Deploy the Worker and hard-refresh both interfaces; no SQL migration is required.
+
+## 1.1.0: consent gate and Qualtrics handoff
+
+Participants authenticate before viewing the Plain Language Statement and Consent Form. All consent items are required and the acceptance time and document versions are stored in `participant_consents`, separately from task exports. After both tasks and the final recording sync complete, the participant is redirected to Qualtrics with the exact `Participant Code` embedded-data field. Deploy the Worker, run `migrations/004-consent.sql`, and hard-refresh both interfaces.

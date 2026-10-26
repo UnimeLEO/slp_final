@@ -125,3 +125,13 @@ CREATE TABLE IF NOT EXISTS interaction_events (
 CREATE INDEX IF NOT EXISTS events_draft ON interaction_events(session_id,draft_id,page_id,seq);
 CREATE INDEX IF NOT EXISTS drafts_message ON drafts(message_id);
 INSERT INTO schema_meta(name,value) VALUES('schema_version','3') ON CONFLICT(name) DO UPDATE SET value='3';
+
+-- Additive v1.1.0 consent record. Consent is stored separately from task data.
+CREATE TABLE IF NOT EXISTS participant_consents (
+  participant_code TEXT PRIMARY KEY REFERENCES participants(participant_code) ON DELETE CASCADE,
+  consent_version TEXT NOT NULL,
+  pls_version TEXT NOT NULL,
+  accepted_items_json TEXT NOT NULL,
+  accepted_ms INTEGER NOT NULL
+);
+INSERT INTO schema_meta(name,value) VALUES('schema_version','4') ON CONFLICT(name) DO UPDATE SET value='4';
