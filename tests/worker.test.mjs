@@ -10,6 +10,7 @@ test('health and CORS: correct origin only; missing DB fails clearly', async () 
   const { env, request } = setup();
   const good = await request(null, { method: 'GET', path: '/health' });
   assert.equal(good.data.database, 'ready');
+  assert.equal(good.data.version, '1.1.1a');
   assert.equal(good.response.headers.get('access-control-allow-origin'), 'https://unimeleo.github.io');
   const rejected = await request(null, { method: 'GET', path: '/health', origin: 'https://untrusted.example' });
   assert.equal(rejected.response.status, 403);
@@ -104,6 +105,7 @@ test('four formal-task orders are persisted correctly and creation is atomic', a
     assert.match(formal[code].interlocutor, /You may accept a reasonable proposal when appropriate/);
     assert.match(formal[code].interlocutor, /The outcome of the conversation is not predetermined and should emerge naturally from your exchange; do not end the conversation on your own initiative/);
     assert.match(formal[code].interlocutor, /Keep each message short: usually one or two sentences, under about 20 words, and not longer than Robin’s latest message/);
+    assert.match(formal[code].interlocutor, /Use your own casual wording rather than the wording of these instructions/);
     assert.match(formal[code].interlocutor, /Do not use em dashes or semicolons, and do not end every message with a question or a reassurance/);
     assert.match(formal[code].participant, /negotiate with Jimmy until the conversation comes to a natural end/);
   }
