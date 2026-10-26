@@ -102,7 +102,10 @@ test('four formal-task orders are persisted correctly and creation is atomic', a
     assert.match(formal[code].interlocutor, /Do not proactively suggest solutions, compromises, or alternative arrangements/);
     assert.match(formal[code].interlocutor, /Let Robin take the initiative in developing possible solutions/);
     assert.match(formal[code].interlocutor, /You may accept a reasonable proposal when appropriate/);
+    assert.match(formal[code].interlocutor, /The outcome of the conversation is not predetermined and should emerge naturally from your exchange; do not end the conversation on your own initiative/);
+    assert.match(formal[code].participant, /negotiate with Jimmy until the conversation comes to a natural end/);
   }
+  assert.match(formal.A.interlocutor, /Robin does not know that the deposit is non-refundable/);
   const duplicate = await request({ action: 'admin_create', participant_code: 'P01', order_index: 0 }, { admin: true });
   assert.equal(duplicate.response.status, 409);
   const invalid = await request({ action: 'admin_create', participant_code: 'P05', order_index: 9 }, { admin: true });
