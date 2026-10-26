@@ -1,11 +1,11 @@
-# Cloudflare 控制台部署：slp-final-admin（1.1.1）
+# Cloudflare 控制台部署：slp-final-admin（1.1.1a）
 
-## 当前升级：1.1.0 → 1.1.1
+## 当前升级：1.1.1 → 1.1.1a
 
 1. 用仓库 `worker/worker.mjs` 全文替换现有 Worker 入口并 Deploy。
 2. 本次升级不执行新 SQL；保留已经完成的 `004-consent.sql`、`DB`、`ADMIN_SECRET`、`OPENAI_API_KEY` 和模型参数。
-3. `/health` 应返回 `version: "1.1.1"`、`recording_enabled: true`、`consent_enabled: true`、`database: "ready"`。
-4. GitHub Pages 更新后强制刷新两端；工作台页头应显示“正式版 1.1.1”。
+3. `/health` 应返回 `version: "1.1.1a"`、`recording_enabled: true`、`consent_enabled: true`、`database: "ready"`。
+4. 本次仅修改服务器端 Prompt，无需更新 GitHub Pages；工作台静态界面版本仍为 1.1.1。
 5. 用一个新编号完成冒烟测试：登录、确认已阅读 PLS、进入 Consent、勾选 Final confirmation、开始任务。
 6. Consent 版本已更新为 1.1；此前只完成 1.0 同意流程的测试编号会再次进入新版 PLS/Consent 流程。
 
