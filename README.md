@@ -2,7 +2,7 @@
 
 用于 Second Language Pragmatics 期末实证研究的轻量级文字互动平台。
 
-## 1.1.1 — 正式实验版本
+## 1.1.1a — 正式实验版本
 
 本版用于正式运行真人与 AI 两种互动条件：参与者在自己的电脑操作；Human 条件由研究者扮演 Jimmy 回复，AI 条件通过服务端调用 OpenAI Responses API。一个 Cloudflare Worker 同时提供参与者与管理员 API；管理操作均需服务端验证研究者口令。
 
@@ -121,6 +121,7 @@ node --test tests/*.test.mjs
 - **1.0.2**：两套 Jimmy Prompt 改为由 Robin 主动提出解决方案；Jimmy 负责表达顾虑、说明限制并回应提议。
 - **1.1.0**：增加服务器端同意门控、PLS/Consent 页面，以及带参与者编号的 Qualtrics 完成跳转。
 - **1.1.1**：PLS 与 Consent 分页；PLS 增加阅读确认，Consent 说明改为 bullet points 并只保留 Final confirmation 复选框。
+- **1.1.1a**：Prompt 修订 a；要求 Jimmy 使用自己的非正式措辞，避免复述角色说明中的表达。后续仅修改 Prompt 时按 `b`、`c`、`d` 依次顺延。
 
 ### Frontend update 0.3.1
 
