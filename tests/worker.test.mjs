@@ -103,6 +103,8 @@ test('four formal-task orders are persisted correctly and creation is atomic', a
     assert.match(formal[code].interlocutor, /Let Robin take the initiative in developing possible solutions/);
     assert.match(formal[code].interlocutor, /You may accept a reasonable proposal when appropriate/);
     assert.match(formal[code].interlocutor, /The outcome of the conversation is not predetermined and should emerge naturally from your exchange; do not end the conversation on your own initiative/);
+    assert.match(formal[code].interlocutor, /Keep each message short: usually one or two sentences, under about 20 words, and not longer than Robin’s latest message/);
+    assert.match(formal[code].interlocutor, /Do not use em dashes or semicolons, and do not end every message with a question or a reassurance/);
     assert.match(formal[code].participant, /negotiate with Jimmy until the conversation comes to a natural end/);
   }
   assert.match(formal.A.interlocutor, /Robin does not know that the deposit is non-refundable/);
