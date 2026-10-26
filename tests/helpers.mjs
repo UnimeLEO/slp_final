@@ -3,11 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import worker from '../worker/worker.mjs';
 
-export const CONSENT_ITEMS = [
-  'informed_consent', 'voluntary_participation', 'chat_records',
-  'keystroke_data', 'partner_identity', 'questionnaire', 'use_of_data',
-  'withdrawal', 'final_confirmation'
-];
+export const CONSENT_ITEMS = ['pls_read', 'final_confirmation'];
 
 // Run the real SQL and Worker handler against SQLite. No Cloudflare credentials.
 class D1Adapter {

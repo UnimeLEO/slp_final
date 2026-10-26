@@ -1,16 +1,12 @@
-// SLP v1.1.0 — Consent-gated formal Human/AI interaction experiment.
+// SLP v1.1.1 — Two-step PLS and consent flow.
 // Bind a dedicated D1 database as DB, set ADMIN_SECRET (Secret, >=20 characters).
 // Optional ALLOWED_ORIGIN (Text) defaults to this project's GitHub Pages origin.
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const DEFAULT_ORIGIN = 'https://unimeleo.github.io';
 const MAX_BODY_BYTES = 524288;
-const CONSENT_VERSION = '1.0';
+const CONSENT_VERSION = '1.1';
 const PLS_VERSION = '1.0';
-const CONSENT_ITEM_KEYS = Object.freeze([
-  'informed_consent', 'voluntary_participation', 'chat_records',
-  'keystroke_data', 'partner_identity', 'questionnaire', 'use_of_data',
-  'withdrawal', 'final_confirmation'
-]);
+const CONSENT_ITEM_KEYS = Object.freeze(['pls_read', 'final_confirmation']);
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }

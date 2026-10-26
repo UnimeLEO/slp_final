@@ -28,3 +28,14 @@ test('questionnaire URL carries the exact Qualtrics embedded-data field and part
  assert.equal(url.searchParams.get('Participant Code'),'01');
  assert.equal([...url.searchParams.keys()][0],'Participant Code');
 });
+test('PLS and Consent are separate steps with one checkbox on each page',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const pls=html.slice(html.indexOf('<section id="pls-page"'),html.indexOf('<section id="consent-page"'));
+ const consent=html.slice(html.indexOf('<section id="consent-page"'),html.indexOf('<section id="conversation-page"'));
+ assert.match(pls,/name="pls_read" required/);
+ assert.equal((pls.match(/type="checkbox"/g)||[]).length,1);
+ assert.equal((consent.match(/type="checkbox"/g)||[]).length,1);
+ assert.match(consent,/name="final_confirmation" required/);
+ const statements=consent.slice(consent.indexOf('<ul class="consent-statements">'),consent.indexOf('</ul>'));
+ assert.equal((statements.match(/<li>/g)||[]).length,8);
+});

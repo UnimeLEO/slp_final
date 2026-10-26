@@ -7,11 +7,8 @@
   let pollFailures = 0;
   let recorder = null, recordingFinishing = null, initialSync = true;
   let completionChecking = false, redirecting = false;
-  const consentItems = [
-    'informed_consent', 'voluntary_participation', 'chat_records',
-    'keystroke_data', 'partner_identity', 'questionnaire', 'use_of_data',
-    'withdrawal', 'final_confirmation'
-  ];
+  let plsConfirmed = false;
+  const consentItems = ['pls_read', 'final_confirmation'];
   const interlocutorName = window.SLP_CONFIG.INTERLOCUTOR_NAME || 'Jimmy';
   $('interlocutor-name').textContent = interlocutorName;
   const view = SLP.chatView($('messages'), 'participant', { otherLabel: interlocutorName, showSeconds: false,
@@ -58,6 +55,7 @@
     clearTimeout(pollTimer);
     const url = questionnaireUrl();
     $('entry-page').hidden = true;
+    $('pls-page').hidden = true;
     $('consent-page').hidden = true;
     $('conversation-page').hidden = true;
     $('complete-page').hidden = false;
@@ -137,10 +135,15 @@
     if (data.consent?.enabled !== true) throw new Error('The consent system is not ready. Please contact the researcher.');
     if (data.consent.required) {
       $('consent-participant-code').textContent = credentials.participant_code;
+      plsConfirmed = false;
+      $('pls-read-confirmation').checked = false;
+      $('pls-continue').disabled = true;
+      $('consent-form').elements.namedItem('final_confirmation').checked = false;
       $('entry-page').hidden = true;
       $('conversation-page').hidden = true;
       $('complete-page').hidden = true;
-      $('consent-page').hidden = false;
+      $('consent-page').hidden = true;
+      $('pls-page').hidden = false;
       return;
     }
     await SLPLogging.recover({base,participantId:credentials.participant_code,excludeSession:data.session?.id,call});
@@ -154,7 +157,7 @@
     pending = null; $('message-draft').value = '';
     $('send-message').textContent = 'Send';$('end-task').textContent='End conversation';view.reset(); initialSync=true;apply(data.session);
     await ensureRecorder();
-    $('entry-page').hidden = true;$('consent-page').hidden = true;$('complete-page').hidden = true;$('conversation-page').hidden = false;
+    $('entry-page').hidden = true;$('pls-page').hidden = true;$('consent-page').hidden = true;$('complete-page').hidden = true;$('conversation-page').hidden = false;
     await poll();
   }
   $('entry-form').addEventListener('submit', async event => {
@@ -166,12 +169,26 @@
     catch (error) { credentials = null; showError('entry-status', error); }
     finally { $('entry-fields').disabled = false; updateEntry(); }
   });
+  $('pls-read-confirmation').addEventListener('change', () => {
+    $('pls-continue').disabled = !$('pls-read-confirmation').checked;
+  });
+  $('pls-form').addEventListener('submit', event => {
+    event.preventDefault();
+    if (!$('pls-form').checkValidity()) return;
+    plsConfirmed = true;
+    $('pls-page').hidden = true;
+    $('consent-page').hidden = false;
+    $('consent-form').elements.namedItem('final_confirmation').focus();
+    scrollTo({ top: 0, behavior: 'auto' });
+  });
   $('consent-form').addEventListener('submit', async event => {
     event.preventDefault();
     if (controlBusy || !credentials || !$('consent-form').checkValidity()) return;
     controlBusy = true; $('consent-fields').disabled = true;
     try {
-      const accepted = consentItems.filter(key => $('consent-form').elements.namedItem(key)?.checked);
+      const accepted = [];
+      if (plsConfirmed) accepted.push(consentItems[0]);
+      if ($('consent-form').elements.namedItem('final_confirmation')?.checked) accepted.push(consentItems[1]);
       const data = await call({ action: 'participant_consent', accepted_items: accepted });
       if (!data.consent?.accepted) throw new Error('Consent could not be recorded.');
       status('consent-status', 'Consent recorded. Opening the first task…');

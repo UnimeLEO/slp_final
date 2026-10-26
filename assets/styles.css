@@ -72,8 +72,13 @@ fieldset > button { margin-top: 24px; }
 .project-details dt { font-weight: 600; }
 .project-details dd { margin: 0; overflow-wrap: anywhere; }
 .print-control { margin-top: 14px; }
+.pls-confirmation { margin-top: 24px; padding-top: 20px; border-top: 1px solid #d5d5d5; }
+.pls-confirmation .final-consent { margin-top: 0; }
+.pls-confirmation button { margin-top: 20px; }
 .participant-confirmation { padding: 12px 14px; background: #f7f7f7; border: 1px solid #ddd; }
 .consent-form legend { font-size: 19px; font-weight: 600; margin-bottom: 10px; }
+.consent-statements { margin: 0; padding-left: 24px; }
+.consent-statements li { margin: 0; padding: 8px 0 8px 5px; }
 .consent-item { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: start; margin: 0; padding: 15px 0; border-bottom: 1px solid #e1e1e1; font-weight: 400; cursor: pointer; }
 .consent-item input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: #333; }
 .consent-item span { min-width: 0; }
@@ -181,7 +186,7 @@ th { color: #555; font-size: 13px; }
 
 @media print {
   body { background: #fff; }
-  .entry-page, .participant-workspace, .completion, button, .status-text { display: none !important; }
+  .entry-page, .participant-workspace, .completion, .pls-confirmation, button, .status-text { display: none !important; }
   .consent-page, .study-information, .consent-form { max-width: none; margin: 0; padding: 0; border: 0; }
   .consent-form { break-before: page; }
   .study-information a { color: #000; text-decoration: none; }

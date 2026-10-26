@@ -53,7 +53,7 @@ test('consent is recorded separately and gates task access', async () => {
   assert.equal(accepted.data.consent.accepted, true);
   assert.equal((await participant({ action: 'participant_join' })).data.session.id, 'CONSENT01-T1');
   const row = env.DB.db.prepare('SELECT * FROM participant_consents WHERE participant_code=?').get('CONSENT01');
-  assert.equal(row.consent_version, '1.0');
+  assert.equal(row.consent_version, '1.1');
   assert.equal(row.pls_version, '1.0');
   assert.deepEqual(JSON.parse(row.accepted_items_json), CONSENT_ITEMS);
 });

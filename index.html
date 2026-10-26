@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Conversation</title>
-  <link rel="stylesheet" href="./assets/styles.css?v=110">
-  <script src="./assets/config.js?v=110" defer></script>
-  <script src="./assets/common.js?v=110" defer></script>
-  <script src="./assets/logging.js?v=110" defer></script>
-  <script src="./assets/participant.js?v=110" defer></script>
+  <link rel="stylesheet" href="./assets/styles.css?v=111">
+  <script src="./assets/config.js?v=111" defer></script>
+  <script src="./assets/common.js?v=111" defer></script>
+  <script src="./assets/logging.js?v=111" defer></script>
+  <script src="./assets/participant.js?v=111" defer></script>
 </head>
 <body data-page="participant">
 <main>
@@ -37,7 +37,7 @@
     <p id="entry-status" class="status-text" role="status" aria-live="polite"></p>
   </section>
 
-  <section id="consent-page" class="consent-page" aria-labelledby="pls-heading" hidden>
+  <section id="pls-page" class="consent-page" aria-labelledby="pls-heading" hidden>
     <article class="card study-information">
       <h1 id="pls-heading">Plain Language Statement</h1>
       <p>You are invited to take part in a short study on how people make requests and negotiate in English through online text chat. Please read this statement carefully before deciding whether to take part.</p>
@@ -111,22 +111,30 @@
       <p>Researcher: Jiashuo (Leo) Niu, <a href="mailto:jiashuon@student.unimelb.edu.au">jiashuon@student.unimelb.edu.au</a><br>Subject coordinator: Professor Carsten Roever, <a href="mailto:carsten@unimelb.edu.au">carsten@unimelb.edu.au</a></p>
       <p>Thank you for considering taking part. Please keep a copy of this statement for your records.</p>
       <button id="print-study-information" class="secondary print-control" type="button">Print or save a copy</button>
+      <form id="pls-form" class="pls-confirmation">
+        <label class="consent-item final-consent"><input id="pls-read-confirmation" type="checkbox" name="pls_read" required><span>I confirm that I have read and understood the Plain Language Statement.</span></label>
+        <button class="primary wide" id="pls-continue" disabled>Continue to the Consent Form</button>
+      </form>
     </article>
+  </section>
 
+  <section id="consent-page" class="consent-page" aria-labelledby="consent-heading" hidden>
     <form id="consent-form" class="card consent-form">
-      <h1>Consent Form</h1>
-      <p>This form records your consent to take part in the study described in the Plain Language Statement. Please read each statement and tick the box if you agree.</p>
+      <h1 id="consent-heading">Consent Form</h1>
+      <p>This form records your consent to take part in the study described in the Plain Language Statement. Please read the statements below before providing your final confirmation.</p>
       <p class="participant-confirmation">Participant code: <strong id="consent-participant-code"></strong></p>
       <fieldset id="consent-fields">
         <legend>Consent statements</legend>
-        <label class="consent-item"><input type="checkbox" name="informed_consent" required><span><strong>Informed consent:</strong> I have read and understood the Plain Language Statement, and I have had the opportunity to ask questions about the study.</span></label>
-        <label class="consent-item"><input type="checkbox" name="voluntary_participation" required><span><strong>Voluntary participation:</strong> I agree to take part in two text-based role-play conversations. I understand that taking part is voluntary and that I can stop at any time without giving a reason.</span></label>
-        <label class="consent-item"><input type="checkbox" name="chat_records" required><span><strong>Chat records:</strong> I agree that the chat messages I send and receive during the role-plays, and the time each message is sent, may be collected and analysed.</span></label>
-        <label class="consent-item"><input type="checkbox" name="keystroke_data" required><span><strong>Keystroke data:</strong> I understand and agree that my typing inside the task's chat box will be recorded, including key presses, deletions, revisions and their timing. I understand that this includes text I type but do not send.</span></label>
-        <label class="consent-item"><input type="checkbox" name="partner_identity" required><span><strong>Partner identity:</strong> I understand that I may not be told the type of chat partner (a human role-player or a computer-based conversational system) before each round, and that this will be explained during the debriefing.</span></label>
-        <label class="consent-item"><input type="checkbox" name="questionnaire" required><span><strong>Questionnaire:</strong> I agree to complete a short questionnaire about my background and my experience of the tasks.</span></label>
-        <label class="consent-item"><input type="checkbox" name="use_of_data" required><span><strong>Use of data:</strong> I agree that the researcher may use my de-identified data for analysis in a coursework research report, and that short anonymised excerpts from my chats may be quoted.</span></label>
-        <label class="consent-item"><input type="checkbox" name="withdrawal" required><span><strong>Withdrawal:</strong> I understand that I can withdraw my data by emailing the researcher with my participant code before 0:00 (GMT+11) on November 1, 2026, and that after this date it may no longer be possible to remove my data.</span></label>
+        <ul class="consent-statements">
+          <li><strong>Informed consent:</strong> I have read and understood the Plain Language Statement, and I have had the opportunity to ask questions about the study.</li>
+          <li><strong>Voluntary participation:</strong> I agree to take part in two text-based role-play conversations. I understand that taking part is voluntary and that I can stop at any time without giving a reason.</li>
+          <li><strong>Chat records:</strong> I agree that the chat messages I send and receive during the role-plays, and the time each message is sent, may be collected and analysed.</li>
+          <li><strong>Keystroke data:</strong> I understand and agree that my typing inside the task's chat box will be recorded, including key presses, deletions, revisions and their timing. I understand that this includes text I type but do not send.</li>
+          <li><strong>Partner identity:</strong> I understand that I may not be told the type of chat partner (a human role-player or a computer-based conversational system) before each round, and that this will be explained during the debriefing.</li>
+          <li><strong>Questionnaire:</strong> I agree to complete a short questionnaire about my background and my experience of the tasks.</li>
+          <li><strong>Use of data:</strong> I agree that the researcher may use my de-identified data for analysis in a coursework research report, and that short anonymised excerpts from my chats may be quoted.</li>
+          <li><strong>Withdrawal:</strong> I understand that I can withdraw my data by emailing the researcher with my participant code before 0:00 (GMT+11) on November 1, 2026, and that after this date it may no longer be possible to remove my data.</li>
+        </ul>
         <label class="consent-item final-consent"><input type="checkbox" name="final_confirmation" required><span><strong>Final confirmation:</strong> By confirming below, I agree to take part in this study under the conditions described above and in the Plain Language Statement.</span></label>
         <button class="primary wide" id="consent-continue">I agree and wish to continue</button>
       </fieldset>
